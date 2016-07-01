@@ -1,0 +1,279 @@
+\section{\acl{SNI}}
+
+\subsection{Especificação}
+
+\begin{lstlisting}[caption={RFC 3546, trecho da seção 3.1}]
+The "extension_data" field of this extension SHALL contain    
+"ServerNameList" where: 
+ 
+   struct { 
+       ServerName server_name_list<1..2^16-1> 
+   } ServerNameList; 
+ 
+   struct { 
+       NameType name_type; 
+       select (name_type) { 
+           case host_name: HostName; 
+       } name; 
+   } ServerName; 
+ 
+   enum { 
+       host_name(0), (255) 
+   } NameType; 
+ 
+   opaque HostName<1..2^16-1>;
+\end{lstlisting}
+
+\subsection{Divergências}
+
+Apesar da especificação permitir a definição de múltiplos nomes, a 
+implementação restringe a indicação de um único nome, pois se julgou 
+desnecessária aquela flexibilidade.
+
+\subsection{API Estendida}
+
+\begin{lstlisting}[language=C,%
+		    emph={TLSX_set_server_name,TLSX_CTX_set_servername_callback},%
+		    caption=API para a extensão \acs{SNI}]
+/* ----- Client Side ----- */
+void TLSX_set_server_name (
+	SSL * ssl,
+	const char *server_name 
+);
+
+/* ----- Server Side ----- */
+void TLSX_CTX_set_servername_callback (
+	SSL_CTX *ctx,
+	int (*cb) (
+		SSL *ssl,
+		const char *name,
+		void *uarg
+	),
+	void *uarg
+);
+\end{lstlisting}
+
+A função de \emph{callback} \verb|cb| definida pela \verb|TLSX_CTX_set_servername_callback|
+será acionada logo após o recebimento da mensagem \tlsHsCh contendo a 
+extensão \acl{SNI} ou quando restauração de uma antiga sessão 
+(\emph{``session resumption''}).
+
+\subsection{Implementação}
+
+\begin{description}[\breaklabel\setlabelstyle{\ttfamily}]
+
+\item[s3\_srvr.c::ssl3\_get\_client\_hello]
+	Em caso de restauração de sessão aciona a \emph{callback} para tratar o nome do 
+	\emph{host}, caso esteja definida.
+
+\end{description}
+
+\subsection{Testes de Conformidade}
+A aplicação \verb|s_server| foi modificada para configurar (através da 
+\verb|TLSX_CTX_set_servername_callback|) a função \verb|ssl_servername_cb| como \emph{callback}
+para o processamento dessa extensão.
+
+A prova de conformidade será, portanto, a devida ativação desta função na aplicação \verb|s_server|
+e a exibição da mensagem informando o \emph{hostname} recebido na extensão.
+
+\begin{lstlisting}[language=C,%
+		    emph={ssl_servername_cb},%
+		    caption=\emph{Callback} para tratar extensão \acs{SNI}]
+static int MS_CALLBACK 
+ssl_servername_cb (SSL *s, const char *servername, void *uarg) 
+	{ 
+	BIO_printf(bio_err, "Hostname in TLS extension: \"%s\"\n", 
+	  servername); 
+ 
+	return SSL_ERROR_NONE; 
+	}
+\end{lstlisting}
+
+\begin{lstlisting}[caption=Chamada do script de teste para a extensão \acs{SNI}]
+./s_client -tlsx_server_name -reconnect 1
+\end{lstlisting}
+
+% Provisório...
+\newpage
+
+\subsubsection{Primeira Conexão (\emph{full handshake})}
+
+\begin{lstlisting}[caption=Primeira Conexão -- Decodificação da mensagem \tlsHsCh]
+Secure Socket Layer 
+  SSL Record Layer: Handshake Protocol: Client Hello 
+    Content Type: Handshake (22) 
+    Version: TLS 1.0 (0x0301) 
+    Length: 74 
+    Handshake Protocol: Client Hello 
+      Handshake Type: Client Hello (1) 
+      Length: 70 
+      Version: TLS 1.0 (0x0301) 
+      Random.gmt_unix_time: Jan  4, 2006 19:24:49.000000000 
+      Random.bytes 
+      Session ID Length: 0 
+      Cipher Suites Length: 2 
+      Cipher Suites (1 suite) 
+	Cipher Suite: TLS_RSA_WITH_RC4_128_SHA (0x0005) 
+      Compression Methods Length: 1 
+      Compression Methods (1 method) 
+	Compression Method: null (0) 
+      Extensions Length: 27 
+      Extension: server_name 
+	Type: server_name (|0x0000|)
+	Length: |23|
+	Data (23 bytes) 
+
+0000  00 00 00 00 00 00 00 00 00 00 00 00 08 00 45 00   ..............E. 
+0010  00 83 26 3e 40 00 40 06 6d fc c9 2d 09 f0 c9 2d   ..&>@.@.m..-...- 
+0020  09 f0 04 92 11 51 19 45 9b bc 19 42 9b 10 80 18   .....Q.E...B.... 
+0030  20 00 a6 b0 00 00 01 01 08 0a 00 3a bd 97 00 3a    ..........:...: 
+0040  bd 81 16 03 01 00 4a 01 00 00 46 03 01 43 bc 3d   ......J...F..C.= 
+0050  21 af b8 32 9f 5e 4a 6b 30 7d f6 fe c1 d4 ff 4e   !..2.^Jk0}.....N 
+0060  5f c8 44 f1 74 bc df a5 1e be da af 6b 00 00 02   _.D.t.......k... 
+0070  00 05 01 00 00 1b |00 00 00 17 00 15 00 00 12 65|   ......|.........e| 
+0080  |6c 69 65 7a 69 6f 2e 6e 6f 2d 69 70 2e 69 6e 66|   |liezio.no-ip.inf|
+0090  |6f|                                                |o|
+\end{lstlisting}
+
+\begin{lstlisting}[caption=Primeira Conexão -- Saída da aplicação {\tt s\_server}]
+ACCEPT 
+Hostname in TLS extension: "eliezio.no-ip.info" 
+Shared ciphers:RC4-SHA 
+CIPHER is RC4-SHA
+\end{lstlisting}
+
+\subsubsection{Segunda Conexão (\emph{resumed handshake})}
+
+\begin{lstlisting}[caption=Segunda Conexão -- Decodificação da mensagem \tlsHsCh]
+Secure Socket Layer 
+  SSL Record Layer: Handshake Protocol: Client Hello 
+    Content Type: Handshake (22) 
+    Version: TLS 1.0 (0x0301) 
+    Length: 106 
+    Handshake Protocol: Client Hello 
+      Handshake Type: Client Hello (1) 
+      Length: 102 
+      Version: TLS 1.0 (0x0301) 
+      Random.gmt_unix_time: Jan  4, 2006 19:24:50.000000000 
+      Random.bytes 
+      Session ID Length: 32 
+      Session ID (32 bytes) 
+      Cipher Suites Length: 2 
+      Cipher Suites (1 suite) 
+	Cipher Suite: TLS_RSA_WITH_RC4_128_SHA (0x0005) 
+      Compression Methods Length: 1 
+      Compression Methods (1 method) 
+	Compression Method: null (0) 
+      Extensions Length: 27 
+      Extension: server_name 
+	Type: server_name (|0x0000|) 
+	Length: |23| 
+	Data (23 bytes)
+
+0000  00 00 00 00 00 00 00 00 00 00 00 00 08 00 45 00   ..............E. 
+0010  00 a3 c9 ff 40 00 40 06 ca 1a c9 2d 09 f0 c9 2d   ....@.@....-...- 
+0020  09 f0 04 93 11 51 18 ef 09 42 18 f9 cb 1b 80 18   .....Q...B...... 
+0030  20 00 a6 d0 00 00 01 01 08 0a 00 3a c0 c0 00 3a    ..........:...: 
+0040  c0 ba 16 03 01 00 6a 01 00 00 66 03 01 43 bc 3d   ......j...f..C.= 
+0050  22 07 30 57 65 ff f3 0c 0b f7 26 02 2c 34 4c 80   ".0We.....&.,4L. 
+0060  7f 4a 8b 47 6e c4 df e8 fc d1 64 28 dc 20 d2 f6   .J.Gn.....d(. .. 
+0070  98 0e 3f 3e ea 7f 35 09 d3 79 f6 20 b0 93 d6 aa   ..?>..5..y. .... 
+0080  f1 b8 b5 90 ce 26 51 24 52 71 63 d2 53 dc 00 02   .....&Q$Rqc.S... 
+0090  00 05 01 00 00 1b |00 00 00 17 00 15 00 00 12 65|   ......|.........e|
+00a0  |6c 69 65 7a 69 6f 2e 6e 6f 2d 69 70 2e 69 6e 66|   |liezio.no-ip.inf|
+00b0  |6f|                                                |o|
+\end{lstlisting}
+
+\begin{lstlisting}[caption=Segunda Conexão -- Saída da aplicação {\tt s\_server}]
+ACCEPT 
+Hostname in TLS extension: "eliezio.no-ip.info" 
+Shared ciphers:RC4-SHA 
+CIPHER is RC4-SHA 
+Reused session-id
+\end{lstlisting}
+
+\subsection{Testes de Interoperabilidade}
+
+\subsubsection*{Opera Browser 9.0}
+
+\begin{lstlisting}[caption=Conexão oriunda do Opera -- Decodificação da mensagem \tlsHsCh]
+Secure Socket Layer
+    SSL Record Layer: Handshake Protocol: Client Hello
+        Content Type: Handshake (22)
+        Version: TLS 1.0 (0x0301)
+        Length: 130
+        Handshake Protocol: Client Hello
+            Handshake Type: Client Hello (1)
+            Length: 126
+            Version: TLS 1.0 (0x0301)
+            Random.gmt_unix_time: Mar 13, 2006 02:07:39.000000000
+            Random.bytes
+            Session ID Length: 0
+            Cipher Suites Length: 14
+            Cipher Suites (7 suites)
+                Cipher Suite: TLS_RSA_WITH_AES_256_CBC_SHA (0x0035)
+                Cipher Suite: TLS_RSA_WITH_AES_128_CBC_SHA (0x002f)
+                Cipher Suite: TLS_RSA_WITH_RC4_128_SHA (0x0005)
+                Cipher Suite: TLS_RSA_WITH_RC4_128_MD5 (0x0004)
+                Cipher Suite: TLS_RSA_WITH_3DES_EDE_CBC_SHA (0x000a)
+                Cipher Suite: TLS_RSA_WITH_DES_CBC_SHA (0x0009)
+                Cipher Suite: TLS_RSA_EXPORT1024_WITH_RC4_56_SHA (0x0064)
+            Compression Methods Length: 1
+            Compression Methods (1 method)
+                Compression Method: null (0)
+            Extensions Length: 71
+            Extension: server_name
+                Type: server_name (|0x0000|)
+                Length: 23
+                Data (23 bytes)
+            Extension: status_request
+                Type: status_request (0x0005)
+                Length: 40
+                Data (40 bytes)
+
+0000  00 c0 49 43 0b 55 00 0b db e1 13 ef 08 00 45 00   ..IC.U........E.
+0010  00 af e4 07 40 00 80 06 36 73 0a 04 02 a0 c9 2d   ....@...6s.....-
+0020  09 fd 0f 7b 01 bb cc 44 56 f0 8d 02 f6 ff 50 18   ...{...DV.....P.
+0030  44 70 04 b2 00 00 16 03 01 00 82 01 00 00 7e 03   Dp............~.
+0040  01 44 14 fe 1b 7e cf d8 90 df 56 2a c9 39 04 59   .D...~....V*.9.Y
+0050  a6 03 60 f1 43 00 d7 a1 74 0e f1 bb 52 b1 c6 d6   ..`.C...t...R...
+0060  e1 00 00 0e 00 35 00 2f 00 05 00 04 00 0a 00 09   .....5./........
+0070  00 64 01 00 00 47 |00 00 00 17 00 15 00 00 12 65|   .d...G|.........e|
+0080  |6c 69 65 7a 69 6f 2e 6e 6f 2d 69 70 2e 69 6e 66|   |liezio.no-ip.inf|
+0090  |6f| 00 05 00 28 01 00 00 00 23 22 21 30 1f 06 09   |o|...(....#"!0...
+00a0  2b 06 01 05 05 07 30 01 02 04 12 04 10 25 95 4c   +.....0......%.L
+00b0  c1 d3 a5 37 c6 27 a0 bc 37 78 86 62 f0            ...7.'..7x.b.
+\end{lstlisting}
+
+\begin{lstlisting}[caption=Resposta ao \emph{request} do Opera 9 -- Decodificação da mensagem \tlsHsSh]
+Secure Socket Layer
+    TLS Record Layer: Handshake Protocol: Server Hello
+        Content Type: Handshake (22)
+        Version: TLS 1.0 (0x0301)
+        Length: 80
+        Handshake Protocol: Server Hello
+            Handshake Type: Server Hello (2)
+            Length: 76
+            Version: TLS 1.0 (0x0301)
+            Random.gmt_unix_time: Mar 13, 2006 02:04:09.000000000
+            Random.bytes
+            Session ID Length: 32
+            Session ID (32 bytes)
+            Cipher Suite: TLS_RSA_WITH_AES_256_CBC_SHA (0x0035)
+            Compression Method: null (0)
+            Extensions Length: 4
+            Extension: server_name
+                Type: server_name (|0x0000|)
+                Length: 0
+                Data (0 bytes)
+
+0000  00 0b db e1 13 ef 00 c0 49 43 0b 55 08 00 45 00   ........IC.U..E.
+0010  05 d4 46 e5 40 00 74 06 da 70 c9 2d 09 fd 0a 04   ..F.@.t..p.-....
+0020  02 a0 01 bb 0f 7b 8d 02 f6 ff cc 44 57 77 50 10   .....{.....DWwP.
+0030  43 89 41 e9 00 00 16 03 01 00 50 02 00 00 4c 03   C.A.......P...L.
+0040  01 44 14 fd 49 db 10 46 6f c1 21 ca 36 05 94 d3   .D..I..Fo.!.6...
+0050  09 82 40 0a 4f f8 72 9b 21 b6 4d d0 ca 81 ba d2   ..@.O.r.!.M.....
+0060  6f 20 b4 25 99 27 d2 ed ed ca 02 a5 42 d6 d7 c9   o .%.'......B...
+0070  a6 cb f0 12 f1 aa 13 77 8f 44 fa f0 e1 aa 0c ca   .......w.D......
+0080  b0 32 00 35 00 00 04 |00 00 00 00| 16 03 01 06 5b   .2.5...|....|....[
+\end{lstlisting}

@@ -1,0 +1,227 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Introdução a RFC 3546
+%% Copyright 2006 Eliézio Batista de Oliveira
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\chapter{As extensões do protocolo TLS}
+
+As recomendações presentes na RFC 3546 podem ser desmembradas em duas 
+partes distintas. A primeira trata da especificação de um mecanismo genérico 
+de codificação e negociação das extensões ao TLS. A segunda parte especifica
+6 extensões que, em geral, visam reduzir o \emph{overhead} do protocolo TLS.
+
+As extensões codificadas devem ser acrescentadas ao final das mensagens 
+\tlsHsCh e \tlsHsSh. Essa abordagem permite a compatibilidade com 
+as implementações de TLS pré-existentes, uma vez que a sua 
+especificação determina claramente que (\rfcurl{2246}{7.4.1.2}):
+ 
+\begin{quote}
+{\smaller
+\begin{verbatim}
+Forward compatibility note: 
+    In the interests of forward compatibility, it is permitted for a 
+    client hello message to include extra data after the compression 
+    methods. This data must be included in the handshake hashes, but 
+    must otherwise be ignored. This is the only handshake message for 
+    which this is legal; for all other messages, the amount of data 
+    in the message must match the description of the message 
+    precisely.
+\end{verbatim}
+}
+\end{quote}
+
+As principais diretrizes na negociação das extensões são:
+
+\begin{itemize}
+\item Somente ao cliente é permitido propor extensões;
+\item O servidor pode, para cada extensão proposta, tomar uma das seguintes ações:
+\begin{enumerate}
+    \item Aceitá-la e sinalizar essa aceitação acrescentando a mesma extensão
+    ao \tlsHsSh;
+    \item Ignorá-la silenciosamente;
+    \item Rejeitá-la enviando uma mensagem \emph{Alert} para o cliente e
+    abortando o \emph{handshake} imediatamente.
+\end{enumerate}
+\item Caso o servidor não confirme explicitamente a extensão proposta, o
+cliente pode abortar a conexão caso julgue a extensão imprescindível.
+\end{itemize}
+
+A segunda parte da RFC~3546 propõe seis extensões específicas que acrescentam
+novas funcionalidades ao protocolo TLS. Soma-se a elas uma sétima extensão
+não-oficial especificada nesse documento e também implementada no OpenSSL.
+
+Apresenta-se a seguir uma descrição sistemática de cada uma dessas extensões,
+enfatizando os seguintes aspectos:
+
+\begin{description}
+
+\item[Referência] - Indica o trecho de documentação que contém os detalhes
+técnicos sobre a extensão;
+
+\item[Sinopse] - Um breve histórico da questão a ser resolvida e/ou aprimorada
+pela extensão;
+
+\item[Propósito da Extensão] - Descreve a solução proposta pela extensão;
+
+\end{description}
+
+\section{\acf{SNI}}
+
+\begin{description}[\breaklabel]
+
+\item[Referência]
+	\rfcurl{3546}{3.1}.
+	
+\item[Sinopse]
+	Servidores web, principalmente os comerciais, normalmente hospedam mais de um \emph{site}
+	através de um mecanismo chamado \emph{name-based virtual hosting}, disponível em praticamente
+	todos os servidores HTTP existentes. A seleção do domínio é feita pelo cliente HTTP (\emph{browser})
+	através da campo `\verb|Host|' presente no \emph{request} HTTP \cite[seção~14.23]{rfc_http}.
+
+	Nos servidores HTTPS a seleção do domínio precisa ser efetuada precocemente, pois é
+	decisiva para a seleção do certificado do servidor a ser enviado, podendo também impactar na
+	escolha de outros parâmetros da sessão.
+
+	O campo `\verb|Host|' é, portanto, ineficiente para esta seleção uma vez que o \emph{request}
+	HTTP é transmitido tardiamente, após a conclusão do \emph{handshake} TLS.
+
+\item[Propósito da Extensão]
+	A solução natural oferecida nesta extensão consiste na inclusão do nome do \emph{host} na primeira
+	mensagem enviada pelo cliente, que é a \tlsHsCh.
+
+\end{description}
+
+
+\section{\acf{MFL}}
+
+\begin{description}[\breaklabel]
+
+\item[Referência]
+	\rfcurl{3546}{3.2}.
+
+\item[Sinopse]
+	Na camada \emph{record layer}, cada registro recebido só pode ser disponibilizado
+	para o protocolo superior após a verificação da sua integridade. Esse requisito
+	obriga o cliente a dispor de memória suficiente para armazenar o maior registro 
+	admitido pela especificação que é cerca de 16 kB.
+	
+\item[Propósito da Extensão]
+	Essa extensão permite que o cliente estabeleça um limite superior para o tamanho de um 
+	fragmento TLS, podendo variar de 512 até 4096 bytes.
+
+\end{description}
+
+
+\section{\acf{CCU}}
+
+\begin{description}[\breaklabel]
+
+\item[Referência]
+	\rfcurl{3546}{3.3}.
+
+\item[Sinopse]
+	Sempre que a autenticação do cliente é solicitada pelo servidor, o cliente deve
+	enviar uma mensagem \tlsHsC contendo um ou mais certificados.
+	
+\item[Propósito da Extensão]
+	Com o uso dessa extensão, a mensagem \tlsHsC é substituída pela \tlsHsCu que
+	conteria uma ou mais \acsp{URL} para a obtenção de toda a cadeia de certificados do 
+	cliente.
+
+\end{description}
+
+
+\section{\acf{TCI}}
+
+\begin{description}[\breaklabel]
+
+\item[Referência]
+	\rfcurl{3546}{3.4}.
+
+\item[Sinopse]
+	A princípio, um servidor pode estar configurado com mais de um certificado 
+	para um mesmo \emph{Common Name} emitidos por \acsp{CA} diferentes.
+	
+\item[Propósito da Extensão]
+	Essa extensão serviria então para informar ao servidor quais são os \acsp{CA} conhecidos e 
+	confiáveis pelo cliente. O servidor teria então um critério para efetuar uma escolha 
+	inequívoca sobre qual certificado X.509 deve empregado no \emph{handshake} TLS.
+
+\end{description}
+
+
+\section{\acf{TMAC}}
+
+\begin{description}[\breaklabel]
+
+\item[Referência]
+	\rfcurl{3546}{3.5}.
+
+\item[Sinopse]
+	O MAC acrescentado a cada mensagem cifrada TLS, que pode ter 16 ou 20 bytes de tamanho
+	conforme o algoritmo de \emph{Hash} em uso, pode representar uma parcela significativa
+	nos dados trafegados, particularmente em comunicações interativas.
+
+\item[Propósito da Extensão]
+	Essa extensão permite que tanto cliente quanto servidor passem a usar um \acs{HMAC} reduzido 
+	(truncado) a 10 bytes.
+
+\end{description}
+
+
+\section{\acf{CSR}}
+
+\begin{description}[\breaklabel]
+
+\item[Referência]
+	\rfcurl{3546}{3.6}.
+
+\item[Sinopse]
+	O protocolo \ac{OCSP} \cite{rfc_ocsp} permite verificar em tempo real se um certificado foi 
+	revogado ou não pelo \acs{CA} emissor.
+	
+\item[Propósito da Extensão]
+	Com o uso dessa extensão, o servidor atuaria como um \emph{proxy} para a 
+	obtenção de uma resposta \ac{OCSP} sobre o estado (revogado ou não-revogado) do 
+	certificado do próprio servidor, dispensando assim o estabelecimento de uma segunda conexão TCP
+	com o servidor (``\emph{responder}'') OCSP.
+	
+	O uso do \emph{proxy} seria benéfico também para os clientes que estivessem sujeitos a uma
+	conectividade restrita, restrição comumente empregada em \acsp{VPN} para redes corporativas.
+
+\end{description}
+
+
+\section{\acf{SCCI}}
+
+\begin{description}[\breaklabel]
+
+\item[Referência]
+	Draft em andamento. \\
+	Autor: Eliézio Oliveira
+
+\item[Sinopse]
+	Como a cada novo \emph{handshake} TLS (portanto, sem \emph{``session resumption''}), o 
+	servidor envia quase sempre a mesma seqüência de certificados, que 
+	invariavelmente corresponde a maior parte do volume de dados trafegados, 
+	decidimos acrescentar uma sétima extensão, a fim de evitar esse tráfego 
+	redundante.
+
+\item[Propósito da Extensão]
+	Ao propor essa nova extensão, o cliente apresenta os identificadores de cada 
+	certificado presente na cadeia de certificados previamente obtida. Esses 
+	identificadores são exatamente os mesmos utilizados na extensão \acl{TCI}.
+
+	Ao concordar com essa extensão, o servidor terá a opção de enviar uma 
+	mensagem \tlsHsC vazia, mas ainda assim terá a alternativa de mandar a 
+	cadeia inteira. O cliente deve, portanto, estar preparado para tratar os dois 
+	casos ao processar a mensagem \tlsHsC enviada pelo servidor.
+
+	Para eliminar qualquer possibilidade desta extensão deteriorar a segurança do 
+	protocolo TLS, optou-se por incluir toda a seqüência de certificados no cômputo 
+	do resumo criptográfico a ser publicado na mensagem \tlsHsF. Essa operação 
+	deve ser efetuada imediatamente após a inclusão da mensagem \tlsHsC  
+	recebida (cliente) ou enviada (servidor).
+
+\end{description}
+

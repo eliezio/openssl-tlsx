@@ -1,0 +1,189 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Capítulo 2 - Truncated HMAC
+%% Copyright 2006 Eliézio Batista de Oliveira
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{\acl{TMAC}}
+
+\subsection{Especificação}
+
+\begin{lstlisting}[caption={RFC 3546, trecho da seção 3.5}]
+The "extension_data" field of this extension SHALL be empty.
+\end{lstlisting}
+
+\subsection{API Estendida}
+
+\begin{lstlisting}[language=C,emph={TLSX_enable_truncated_hmac},caption={API Estendida para a extensão \acs{TMAC}}]
+void TLSX_enable_truncated_hmac (
+    SSL *ssl
+);
+\end{lstlisting}
+
+\subsection{Divergências}
+Nenhuma.
+
+\subsection{Implementação}
+
+\begin{description}[\breaklabel\setlabelstyle{\ttfamily}]
+
+\item[s3\_clnt.c::ssl3\_connect]
+	A máquina de estados foi modificada no tratamento do estado \verb|SSL_ST_OK|
+	quando o parâmetro \verb|tlsx_truncated_hmac| é efetivado se assim foi 
+	acordado com o servidor.
+
+\item[s3\_pkt.c::ssl3\_get\_record]
+	Modificada para reduzir o tamanho do \acl{HMAC} da mensagem a ser 
+	validada para \verb|TLSX_TRUNCATED_HMAC_SIZE| (10) se assim foi acordado.
+
+\item[s3\_pkt.c::do\_ssl3\_write]
+	Modificada para reduzir o tamanho do \acl{HMAC} da mensagem a ser escrita 
+	para \verb|TLSX_TRUNCATED_HMAC_SIZE| (10) se assim foi acordado.
+
+\item[s3\_srvr.c::ssl3\_accept]
+	No estado \verb|SSL_ST_OK| quando o parâmetro \verb|tlsx_truncated_hmac| é 
+	efetivado se assim foi acordado com o cliente;
+
+\end{description}
+
+\subsection{Testes de Conformidade}
+
+Além de demonstrar a redução no tamanho do \acs{HMAC}, os testes foram 
+projetados para comprovar que essa redução só é efetiva após a conclusão do 
+\emph{handshake} (não afetando a mensagem \tlsHsF, portanto) e que esse parâmetro 
+volta a ser efetivo após a restauração da sessão.
+
+A sintaxe usada na chamada do cliente \verb|s_client| foi:
+
+\begin{lstlisting}[caption={}]
+./s_client.sh -tlsx_truncated_hmac
+\end{lstlisting}
+
+Duas conexões TLS foram estabelecidas com o seguinte diálogo entre as 
+aplicações \verb|s_client| e \verb|s_server|:
+
+\begin{table}[hbtp]
+    \begin{center}
+    \caption{Diálogo entre as aplicações \texttt{s\_client} e \texttt{s\_server} para testar a eficácia da extensão \acs{TMAC}}
+    \label{tab:thmac_clnt_srvr_diag}
+	\begin{tabular}{@{}ll@{}} \toprule
+	\textbf{\texttt{\sf s\_client}} & \textbf{\texttt{\sf s\_server}} \\ \midrule
+request 1 &		\\
+	  & response 1	\\
+N	  &		\\
+request 2 &		\\
+	  & response 2	\\
+Q	  &		\\ \bottomrule
+	\end{tabular}
+    \end{center}
+\end{table}
+
+Todo o tráfego dessas conexões foi capturado e encontra-se sintetizado nas 
+Tabelas~\ref{tab:tmac_run1} e \ref{tab:tmac_run2}:
+
+\begin{table}[ht]
+    \begin{center}
+    \caption{Primeira conexão (nova): Registros com \acs{HMAC} reduzido}
+    \label{tab:tmac_run1}
+	\begin{tabular}{@{}rclrl@{}} \toprule
+%Time (s) & Direction & \multicolumn{2}{c}{TCP} & TLS Records [length] \\ \cmidrule(lr){3-4}
+%         & C $\longleftrightarrow$ S &  Flags & Length & \\ \midrule
+\tlsFlowHeader \\ \midrule
+0.000000 & $\longrightarrow$ & SYN	&	& \\
+\altrowcolor
+0.145307 & $\longleftarrow$  & SYN, ACK	&	& \\
+0.145435 & $\longrightarrow$ & ACK	&	& \\
+0.148974 & $\longrightarrow$ &		&    56 & Client Hello [51] \\
+\altrowcolor
+1.897516 & $\longleftarrow$  &		&  1452 & Server Hello [80], \\
+\altrowcolor
+	 &		     &		&	& Certificate [1362/1627] \\
+0.414415 & $\longrightarrow$ & ACK	&	& \\
+\altrowcolor
+0.415191 & $\longleftarrow$  &		&   274 & Certificate [265/1627], \\
+	 &		     &		&	& Server Hello Done [4] \\
+0.415762 & $\longrightarrow$ & ACK	&	& \\
+0.428106 & $\longrightarrow$ &		&   186 & Client Key Exchange [134], \\
+	 &		     &		&	& Change Cipher Spec [1], \\
+	 &		     &		&	& Finished [36] \\
+\altrowcolor
+0.627651 & $\longleftarrow$  &		&    47 & Change Cipher Spec [1], \\
+\altrowcolor
+	 &		     &		&	& Finished [36] \\
+0.667665 & $\longrightarrow$ & ACK	&	& \\
+3.680601 & $\longrightarrow$ &		&    25 & Application Data [\hl{20}] \\
+\altrowcolor
+3.856378 & $\longleftarrow$  & ACK	&	& \\
+\altrowcolor
+9.955240 & $\longleftarrow$  &		&    26 & Application Data [\hl{21}] \\
+9.955423 & $\longrightarrow$ & ACK	&	& \\
+13.803550 & $\longrightarrow$ &		&    17 & Alert - Close Notify [12] \\
+13.803895 & $\longrightarrow$ & FIN, ACK&	& \\
+\altrowcolor
+13.842239 & $\longleftarrow$  & ACK	&	& \\
+\altrowcolor
+13.851260 & $\longleftarrow$  & FIN, ACK&	& \\
+13.851370 & $\longrightarrow$ & ACK	&	& \\ \midrule
+	\end{tabular}
+    \end{center}
+\end{table}
+
+\begin{table}[ht]
+    \begin{center}
+    \caption{Primeira conexão (restaurada): Registros com \acs{HMAC} reduzido}
+    \label{tab:tmac_run2}
+	\begin{tabular}{@{}rclrl@{}} \toprule
+%Time (s) & Direction & \multicolumn{2}{c}{TCP} & TLS Records [length] \\ \cmidrule(lr){3-4}
+%         & C $\longleftrightarrow$ S &  Flags & Length & \\ \midrule
+\tlsFlowHeader \\ \midrule
+13.804240 & $\longrightarrow$ & SYN	&	& \\
+\altrowcolor
+13.845121 & $\longleftarrow$  & SYN, ACK&	& \\
+13.845296 & $\longrightarrow$ & ACK	&	& \\
+13.846581 & $\longrightarrow$ &		&    88 & Client Hello [83] \\
+\altrowcolor
+13.956312 & $\longleftarrow$  &		&   126 & Server Hello [74], \\
+	  &		      &		&	& Change Cipher Spec [1], \\
+	  &		      &		&	& Finished [36] \\
+13.957341 & $\longrightarrow$ & ACK	&	& \\
+13.959072 & $\longrightarrow$ &		&    47 & Change Cipher Spec [1], \\
+	  &		      &		&	& Finished [36] \\
+\altrowcolor
+14.088635 & $\longleftarrow$  &	ACK	&	& \\
+17.725468 & $\longrightarrow$ &		&    25 & Application Data [\hl{20}] \\
+\altrowcolor
+17.902308 & $\longleftarrow$  & ACK	&	& \\
+\altrowcolor
+21.159691 & $\longleftarrow$  &		&    26 & Application Data [\hl{21}] \\
+21.199546 & $\longrightarrow$ & ACK	&	& \\
+22.834441 & $\longrightarrow$ &		&    17 & Alert - Close Notify [12] \\
+22.834557 & $\longrightarrow$ & FIN, ACK&	& \\ \bottomrule
+	\end{tabular}
+    \end{center}
+\end{table}
+
+\begin{lstlisting}[caption={Detalhe do \tlsHsCh estendido}]
+Secure Socket Layer
+  SSL Record Layer: Handshake Protocol: Client Hello 
+    Content Type: Handshake (22) 
+    Version: TLS 1.0 (0x0301) 
+    Length: 51 
+    Handshake Protocol: Client Hello 
+      Handshake Type: Client Hello (1) 
+      Length: 47 
+      Version: TLS 1.0 (0x0301) 
+      Random.gmt_unix_time: Jan  6, 2006 09:10:53.000000000 
+      Random.bytes 
+      Session ID Length: 0 
+      Cipher Suites Length: 2 
+      Cipher Suites (1 suite) 
+	Cipher Suite: TLS_RSA_WITH_RC4_128_SHA (0x0005) 
+      Compression Methods Length: 1 
+      Compression Methods (1 method) 
+	Compression Method: null (0) 
+      Extensions Length: 4 
+      Extension: truncated_hmac 
+	Type: truncated_hmac (|0x0004|) 
+	Length: |0| 
+	Data (0 bytes)
+\end{lstlisting}
+

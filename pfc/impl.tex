@@ -1,0 +1,377 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Implementação
+%% Copyright 2006 Eliézio Batista de Oliveira
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\chapter{Implementação das extensões}
+
+\section{Diretrizes de desenvolvimento}
+
+As extensões abordadas neste projeto foram implementadas como modificações 
+no \emph{software} \emph{open-source} OpenSSL \cite{openssl}, versão 0.9.8a lançada em 11 de Outubro de 2005.
+Recomendamos o livro \emph{``Network Security with OpenSSL''} \cite{opensslbook} que contém uma
+extensa documentação da \acs{API} do OpenSSL, bem como guias de utilização das diversas
+ferramentas que compõem o \emph{toolkit}.
+
+O OpenSSL assim modificado foi testado com sucesso nas plataformas 
+Microsoft Windows 2000 Professional e Linux/x86, mas acredita-se que não haverá 
+problemas de portabilidade paras as outras dezenas de plataformas suportadas 
+oficialmente pelo OpenSSL.
+
+Optou-se por estender a \acs{API} do OpenSSL com 15 funções assim agrupadas:
+\begin{itemize}
+\item 12 funções a serem usadas pelo cliente TLS para selecionar e configurar as 
+extensões que serão propostas na mensagem \tlsHsCh. Obviamente 
+essas funções devem ser acionadas antes do início do \emph{handshake} TLS para 
+que sejam efetivas;
+\item 2 funções que se destinam a definir \emph{callbacks} no lado servidor para 
+processar as extensões \acl{SNI} e \acl{CCU};
+\item 1 função utilizável pelo servidor para indicar quais as extensões que 
+serão reconhecidas e confirmadas.
+\end{itemize}
+
+Detalharemos a seguir cada uma das extensões implementadas, destacando os 
+seguintes aspectos:
+
+\begin{description}
+\item[Especificação] -- Trecho relevante da especificação oficial para facilitar a 
+comprovação da conformidade da implementação;
+\item[Divergências] -- Pontos em que a implementação se desvia da
+especificação;
+\item[API Estendida] -- Detalhamento das funções específicas para aquela 
+extensão;
+\item[Implementação] -- Documentação das modificações realizadas no 
+código-fonte do OpenSSL;
+\item[Testes de Conformidade] -- \emph{Traces} de mensagens capturadas de testes 
+reais que demonstram a eficácia da implementação e suas eventuais 
+limitações.
+\end{description}
+
+Como um típico projeto \emph{open-source}, o OpenSSL não dispõe de uma documentação
+sobre a sua arquitetura de \emph{software}. Uma breve descrição de algumas poucas estruturas
+usadas internamente podem ser encontradas no capítulo \emph{``Advanced Programming Topics''} 
+do livro \emph{``Network Security with OpenSSL''} supracitado.
+
+\section{Modificações Gerais}
+
+\subsection{\emph{Build}}
+
+Todas as modificações feitas nos arquivos da distribuição oficial do OpenSSL 
+foram condicionadas à definição da macro \verb|OPENSSL_NO_TLSEXT| que está
+indefinida por default. Para defini-la, e conseqüentemente desabilitar todas as 
+extensões, basta incluir a opção \verb|no-tlsext| na configuração do ambiente de 
+\emph{build} do OpenSSL. Exemplo: \verb|./config no-tlsext| para as plataformas 
+UNIX/Linux.
+
+\subsection{Estruturas de Dados}
+
+Foi criado um novo \emph{include header} \textit{``tlsx.h''} que, além de conter os protótipos 
+das funções da \acs{API} estendida, define também a estrutura \verb|TLS_EXTENSIONS|
+responsável por conter a representação das extensões a serem propostas e 
+outras estruturas de dados necessárias para o processamento destas. Vide o Anexo~\ref{chap:tlsx_h}
+para a definição completa desta estrutura.
+
+Três das principais estruturas nativas do OpenSSL foram incrementadas para 
+suportar as extensões alvo desse projeto:
+
+\begin{description}[\breaklabel\setlabelstyle{\ttfamily}]
+
+\item[ssl.h::SSL\_CTX, SSL]
+	Inclusão do campo \verb|tlsx| (tipo: \verb|TLS_EXTENSIONS|) 
+	contendo todas as estruturas necessárias durante o \emph{handshake}.
+
+\item[ssl.h::SSL\_SESSION, ssl\_asn1.c::SSL\_SESSION\_ASN1]
+	Incluídos 3 campos responsáveis pela representação de todas as informações que devem ser 
+	persistidas junto com a sessão TLS, a saber: \verb|tlsx_servername|, 
+	\verb|tlsx_max_fragment_length_id| e \verb|tlsx_truncated_hmac|.
+
+\item[ssl3.h::SSL3\_STATE]
+	Acrescentados os campos que representam os 
+	parâmetros das 2 únicas extensões que impactam a conexão TLS após o 
+	\emph{handshake}: \verb|tlsx_max_plain_length| e \verb|tlsx_truncated_hmac|.
+
+\end{description}
+
+\subsection{Funções Nativas}
+
+Segue abaixo um resumo de todas as modificações genéricas efetuadas no 
+código base do OpenSSL. As demais modificações específicas estão 
+documentadas em cada extensão mais adiante.
+
+\begin{description}[\breaklabel\setlabelstyle{\ttfamily}]
+
+\item[s3\_clnt.c::ssl3\_client\_hello]
+	Passou a chamar a função responsável pelo acréscimo das extensões 
+	propostas (\verb|tlsx_write_request|) ao final da construção da mensagem 
+	\tlsHsCh.
+
+\item[s3\_clnt.c::ssl3\_get\_server\_hello]
+	Chamada da nova função \verb|tlsx_read_response| para processar as respostas 
+	do servidor TLS às extensões propostas, caso não tenha ocorrido uma 
+	restauração da sessão.
+
+\item[s3\_lib.c::ssl3\_clear]
+	Modificada para restabelecer os valores default dos campos \verb|tlsx_max_plain_length| e 
+	\verb|tlsx_truncated_hmac| da estrutura \verb|s3| (do tipo \verb|SSL3_STATE|), que são,
+	respectivamente, \verb|SSL3_RT_MAX_PLAIN_LENGTH_DEFAULT| e \verb|FALSE|.
+
+\item[s3\_srvr.c::ssl3\_get\_client\_hello]
+	Em caso de nova sessão, chama a \verb|tlsx_read_request| para o 
+	processamento das eventuais extensões.
+
+\item[s3\_srvr.c::ssl3\_send\_server\_hello]
+	Passou a chamar a \verb|tlsx_write_response| caso alguma extensão tenha sido 
+	confirmada.
+
+\item[ssl\_asn1.c::i2d\_SSL\_SESSION]
+	Foi incrementada para cuidar da serialização em \acs{ASN1} dos três 
+	parâmetros que devem ser persistidos: \verb|tlsx_servername|, 
+	\verb|tlsx_max_fragment_length_id| e \verb|tlsx_truncated_hmac|.
+
+\item[ssl\_asn1.c::d2i\_SSL\_SESSION]
+	Expandida para tratar da de-serialização dos novos atributos que devem 
+	ser persistidos na sessão (vide descrição da \verb|i2d_SSL_SESSION|).
+
+\item[ssl\_lib.c::SSL\_new]
+	Passou a duplicar as extensões que por ventura estejam pré-definidas no 
+	\verb|SSL_CTX| matriz.
+
+\item[ssl\_lib.c::SSL\_CTX\_new]
+	Foi expandida para iniciar explicitamente as representações das extensões 
+	a serem negociadas presentes no novo campo \verb|tlsx| da estrutura 
+	\verb|SSL_CTX|.
+
+\item[ssl\_sess.c::SSL\_SESSION\_new]
+	Passou a iniciar explicitamente os novos parâmetros persistentes da 
+	estrutura \verb|SSL_SESSION|.
+
+\item[ssl\_sess.c::SSL\_SESSION\_free]
+	Foi incrementada para liberar a memória eventualmente ocupada pelo 
+	novo atributo \verb|tlsx_servername|.
+
+\item[ssl\_txt.c::SSL\_SESSION\_print]
+	Foi expandida para imprimir todos os parâmetros das extensões que 
+	estejam definidos.
+
+\end{description}
+
+\subsection{Novas Funções}
+
+Sempre que possível, as tarefas mais complexas foram delegadas para funções 
+implementadas no novo módulo \textit{``tlsx\_lib.c''} que implementa também todas 
+as funções exportadas na \acs{API}.
+
+Duas funções internas se destacam dentre as implementadas nesse módulo: a 
+\verb|tlsx_write_request| e a \verb|tlsx_read_request| que são, respectivamente, 
+responsáveis pelo envio e recepção das extensões serializadas. A primeira é 
+chamada no último estágio de geração da mensagem \tlsHsCh, dentro da 
+função \verb|ss3_client_hello|.
+
+A segunda (\verb|tlsx_read_request|) é deliberadamente chamada no início do 
+processamento da mensagem \tlsHsCh pela função \verb|ssl3_get_client_hello|, 
+para possibilitar que o objeto da conexão \verb|SSL| seja reconfigurado em função do 
+nome do \emph{host} indicado.
+
+\section{Testes de Conformidade e Interoperabilidade}
+
+\subsection{Aplicações de teste}
+
+Diversas aplicações acompanham o \emph{toolkit} OpenSSL, sendo invocadas como 
+sub-comando do executável chamado \verb|openssl|. Duas destas aplicações foram 
+amplamente modificadas para exercitar a \acs{API} estendida e realizar testes de 
+certificação da implementação das extensões.
+
+Segue abaixo a documentação das principais modificações implementadas nas aplicações 
+\verb|s_server| e \verb|s_client|.
+
+\subsubsection{\texttt{s\_server}}
+
+Novas opções:
+
+\begin{description}[\breaklabel\setlabelstyle{\ttfamily}]
+
+\item[-tlsx\_allow \textit{arg}]
+	Determina as extensões que serão aceitas e confirmadas pelo servidor TLS. 
+	Atualmente {\tt\itshape arg} deve ser sempre igual a \verb|all|.
+
+\end{description}
+
+\subsubsection{\texttt{s\_client}}
+
+Todas as novas opções iniciadas com o prefixo \verb|tlsx_| só podem ser usadas 
+quando TLS é o único protocolo selecionado, o que implica no uso conjunto 
+com a opção \verb|-tls1|.
+
+\begin{description}[\breaklabel\setlabelstyle{\ttfamily}]
+
+\item[-reconnect \textit{arg}]
+	Essa opção já existia mas passou a aceitar um parâmetro opcional \verb|arg| que 
+	determina o número de reconexões (default: 5).
+
+\item[-reinit \textit{arg}]
+	Semelhante a \verb|-reconnect| mas impede que haja uma restauração da 
+	sessão nas conexões subseqüentes. \verb|arg| é opcional e seu valor default é 5.
+
+\item[-tlsx\_server\_name]
+	Habilita a extensão \acl{SNI}. O nome de \emph{host} é
+	definido implicitamente pelo valor passado para a opção \verb|-connect|.
+
+\item[-tlsx\_max\_fragment\_length \textit{length}]
+	Habilita a extensão \acl{MFL} com o tamanho indicado.
+
+\item[-tlsx\_cert\_url  \textit{url!hash}]
+\item[-tlsx\_pkipath\_url  \textit{url!hash}]
+	Essas opções, que são mutuamente excludentes, habilitam e configuram a 
+	extensão \acl{CCU}. O \emph{hash} associado ao objeto
+	apontado pela \acs{URL} é opcional e deve estar em notação hexadecimal e
+	separado desta pelo sinal '!'.
+	A opção \verb|-tlsx_cert_url| pode ser empregada múltiplas vezes para definir
+	uma cadeia de certificados elemento a elemento.
+
+\item[-tlsx\_trusted\_ca\_id \textit{arg}]
+	Habilita a extensão \acl{TCI} conforme o tipo indicado por 
+	{\tt\itshape arg}, que deve assumir um dos seguintes valores: \verb|pre_agreed|, 
+	\verb|key_sha1_hash|, \verb|x509_name| ou \verb|cert_sha1_hash|.
+
+\item[-tlsx\_truncated\_hmac]
+	Habilita a extensão \acl{TMAC}.
+
+\item[-tlsx\_server\_cert\_id \textit{arg}]
+	Habilita a extensão \acl{SCCI}, com
+	{\tt\itshape arg} definindo o tipo de identificador a ser utilizado, podendo assumir
+	os mesmos valores que o parâmetro da opção \verb|-tlsx_trusted_ca_id|.
+
+\end{description}
+
+Uma vez estabelecida a conexão TLS, o aplicativo \verb|s_client| entra em modo
+comando, enviando o que for digitado (\emph{line buffered}) para o servidor,
+com os seguintes tratamentos especiais segundo a primeira letra do comando: 
+
+\begin{table}[htp]
+    \begin{center}
+    \caption{Comandos especiais do aplicativo \texttt{s\_client}}
+    \label{tab:s_client_cmds}
+	\begin{tabular}{@{}cp{10cm}@{}} \toprule
+	\tm{Letra} & \tm{Ação} \\ \midrule
+	\verb|Q| & Causa o fechamento das conexões TLS e \acs{TCP} e o encerramento
+	do programa. \\
+	\addlinespace
+	\verb|N| & (nova opção) Força uma reconexão TLS, possivelmente com
+	restauração dos parâmetros da sessão (\emph{``session resumption''}). \\
+	\addlinespace
+	\verb|n| & (nova opção) Força uma reconexão TLS após invalidar a
+	sessão e com isso evitar que seja restaurada. \\ \bottomrule
+	\end{tabular}
+    \end{center}
+\end{table}
+
+\subsection{Ambiente de teste}
+
+O OpenSSL estendido foi compilado e executado nos sistemas operacionais Linux/i386
+(distribuição Ubuntu 5.10, \emph{kernel} 2.6.12) e Windows 2000 Professional, ambos sobre
+um \emph{hardware} PC/Intel-Pentium. O computador utilizado está registrado no
+\acs{DNS} com o nome dinâmico \verb|eliezio.no-ip.info|.
+
+O tráfego TLS foi capturado com o uso do aplicativo \verb|tethereal| \cite{Ethereal} versão 0.10.12,
+que já possui suporte parcial às extensões oficiais do TLS.
+
+Listados a seguir encontram-se os \emph{scripts} usados na ativação das aplicações de teste
+\verb|s_client| e \verb|s_server|:
+
+\begin{lstlisting}[language=ksh,caption=Script \texttt{s\_server.sh}]
+#!/bin/sh 
+ 
+./apps/openssl s_server -accept 443 -cert server.crt -key server.key \ 
+    -no_dhe -no_ecdhe -tls1 -CApath . -WWW -tlsx_allow all $*
+\end{lstlisting}
+
+\begin{lstlisting}[language=ksh,caption=Script \texttt{s\_client.sh}]
+#!/bin/sh 
+ 
+./apps/openssl s_client -connect eliezio.no-ip.info:443 \ 
+    -cipher RC4-SHA -tls1 -CApath . $*
+\end{lstlisting}
+
+\subsection{Testes de Interoperabilidade}
+
+Na pesquisa efetuada no início do projeto só foram identificadas duas outras implementações
+da RFC~3546, ambas parciais.
+
+A pilha SSL/TLS GnuTLS \cite{gnutls} versão 1.0.14 implementa as extensões \acl{SNI} e
+\acl{MFL}.
+
+O navegador \emph{web} Opera 9.0 \cite{opera9}, por sua vez, traz implementado as extensões
+\acl{SNI} e \acl{CSR}.
+
+\subsection{Apresentação dos resultados dos testes}
+
+Os resultados dos testes comprovando a conformidade da implementação serão apresentados em geral
+em forma de listagens contendo um trecho da saída do decodificador \texttt{tethereal}, ressaltando
+as mensagens TLS impactadas pela extensão.
+
+Em alguns casos específicos, onde uma visão mais ampla de toda a comunicação se fizer necessária,
+apresentaremos uma tabela sinóptica elaborada manualmente a partir da listagem dos pacotes TCP exibida
+pelo \texttt{ethereal}. Precisou-se recorrer à decodificação manual dos registros TLS devido à
+incapacidade do \texttt{ethereal} de decodificar corretamente registros fracionados em mais de um
+segmento TCP.
+
+    \begin{center}
+    \label{tab:tls_flow_sample}
+	\begin{tabular}{@{}rclrl@{}} \toprule
+%Time (s) & Direction & \multicolumn{2}{c}{TCP} & TLS Records [length] \\ \cmidrule(lr){3-4}
+%         & C $\longleftrightarrow$ S &  Flags & Length & \\ \midrule
+\tlsFlowHeader \\ \midrule
+0.000000 & $\longrightarrow$ & SYN      &	& \\
+\altrowcolor
+0.028681 & $\longleftarrow$  & SYN, ACK &	& \\
+0.028835 & $\longrightarrow$ & ACK      &	& \\
+0.031536 & $\longrightarrow$ &		&    57 & Client Hello [52] \\
+\altrowcolor
+0.072442 & $\longleftarrow$  &		&    86 & Server Hello [81] \\
+0.072600 & $\longrightarrow$ & ACK      &	& \\
+\altrowcolor
+0.096442 & $\longleftarrow$  &		&  1452 & Certificate R1 [1024], \\
+\altrowcolor
+	 &		     &	        &	& Certificate R2a [418/603] \\
+\multicolumn{5}{c}{\ldots} \\ \bottomrule
+	\end{tabular}
+    \end{center}
+
+Nessas tabelas (vide exemplo \vpageref[acima]{tab:tls_flow_sample}), os pacotes de uma conexão 
+estão dispostos horizontalmente, um for fileira.
+As informações de cada pacote discriminadas em cada coluna são as seguintes:
+
+\begin{tabular}{@{}rp{11cm}@{}}
+
+\emph{Time (s)} & Tempo transcorrido desde o início da captura, em segundos. 
+                  Obtido diretamente do \texttt{ethereal}. \\
+
+\addlinespace
+
+\emph{Direction} & Direção do fluxo do pacote: cliente para servidor ($\longrightarrow$)
+ou servidor para cliente ($\longleftarrow$), que também possuem um sombreamento diferenciado. 
+Inferido com base nos endereços IP origem e destino do \emph{header} IP. \\
+
+\addlinespace
+
+\emph{TCP Flags} & \emph{Flags} presentes no cabeçalho do pacote TCP, exibido quando este
+não contém nenhum dado. 
+Exibido diretamente pelo \texttt{ethereal} e indicado pelo campo \texttt{Len=0}. \\
+
+\addlinespace
+
+\emph{TCP Length} & Tamanho da área de dados (\emph{payload}) do segmento TCP.
+	Indicado pelo campo \texttt{Len=\emph{n}, n > 0}. \\
+
+\addlinespace
+
+\emph{TLS Record [length]} & Registros presentes no segmento TCP, com o tamanho total do registro
+	indicado entre `[]'.
+	
+	Quando o registro está parcialmente representado no segmento, esse valor é
+	apresentado na forma \texttt{[\emph{tamanho parcial}/\emph{tamanho total}]}.
+	
+	Quando uma mesma mensagem TLS é particionada em diversos registros, acrescenta-se a notação
+	\texttt{R\emph{n}} para enumerar cada uma das partes. Caso um segmento TCP só contenha
+	parte de um registro TLS, acrescentar-se-á uma letra a esta notação para enumerar estas partes. \\
+\end{tabular}

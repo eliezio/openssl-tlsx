@@ -1,0 +1,42 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Introdução
+%% Copyright 2006 Eliézio Batista de Oliveira
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\unchapter{Introdução}
+
+O protocolo \ac{TLS} \cite{rfc_tls}, previamente conhecido como \ac{SSL}, tem
+se tornado o mecanismo mais popular para o estabelecimento de comunicações
+seguras na Internet, sendo usado inclusive como alternativa ao \acs{IPsec} na
+criação de \acp{VPN}.
+
+Entretanto, a sua adoção em sistemas embutidos tais como telefones celulares e
+\acsp{PDA} enfrenta alguns desafios:
+
+\begin{itemize}
+\item Relativa baixa capacidade de processamento desses dispositivos. Os 
+diversos algoritmos criptográficos usados no TLS demandam, por 
+natureza, uma alta utilização de CPU;
+\item Sua relativa baixa capacidade de armazenamento, que pode limitar a sua
+capacidade de autenticação;
+\item Usam em geral meios de comunicação com banda limitada, especialmente em redes
+compartilhadas onde o tráfego de dados não é prioritário em relação às demais mídias,
+como é típico na rede \acs{GPRS};
+\item A alta latência inerente às redes via satélite;
+\item Algumas redes \emph{wireless} são comumente tarifadas por volume de dados.
+\end{itemize}
+
+Visando torná-lo mais leve para equipamentos sujeitos a essas restrições, o
+\emph{IETF TLS Working Group} publicou em Junho de 2003 a RFC~3546
+\cite{rfc_tlsext}, intitulado \emph{``Transport Layer Security (TLS) Extensions''},
+que propõe diversas extensões ao TLS, preservando a
+retrocompatibilidade com as versões pré-existentes do protocolo.
+
+As reduções promovidas por essas extensões oficiais, entretanto, não tratam da redução da mensagem
+que contém o certificado do servidor, responsável por aproximadamente 70\% do \emph{overhead}
+do TLS no volume de dados durante o estabelecimento de uma conexão.
+
+Face a esta lacuna, uma extensão adicional foi então concebida por este autor para tratar especificamente
+desta notável redução, aplicável a uma grande parte das conexões TLS.
+
+O objetivo desse projeto final de curso é implementar esta extensão adicional e a maioria das
+extensões oficiais da RFC~3546 na pilha TLS/SSL de código aberto OpenSSL.

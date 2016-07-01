@@ -1,0 +1,182 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Capítulo 2 - Server Certificate Chain ID
+%% Copyright 2006 Eliézio Batista de Oliveira
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{\acl{SCCI}}
+
+\subsection{Especificação}
+
+\begin{lstlisting}[caption={Definição (não-oficial) da extensão \acs{SCCI}}]
+      enum { 
+          ..., certificate_chain(10), (65535) 
+      } ExtensionType;
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Especificação (não-oficial) da extensão \acs{SCCI}}]
+The "extension_data" field of this extension SHALL contain
+"CertificateIdentifiers" where: 
+  
+   struct { 
+       CertificateIdentifier certificate_identifiers_list<0..2^16-1>; 
+   } CertificateIdentifiers; 
+ 
+CertificateIdentifier has the same definition of TrustedAuthority.
+\end{lstlisting}
+
+\subsection{API Estendida}
+
+\begin{lstlisting}[language=C,emph={TLSX_get_cert_chain,TLSX_set_server_cert_chain,TLSX_free_cert_chain},%
+		    caption={API Estendida para a extensão \acs{SCCI}}]
+/* Client Side */
+STACK_OF(X509) *TLSX_get_cert_chain (
+  SSL *ssl
+);
+
+void TLSX_set_server_cert_chain (
+  SSL *ssl,
+  STACK_OF(X509) *cert_chain,
+  int id_type		/* TLSX_CERT_ID_PRE_AGREED,
+			   TLSX_CERT_ID_KEY_SHA1_HASH,
+			   TLSX_CERT_ID_X509_NAME, or
+			   TLSX_CERT_ID_CERT_SHA1_HASH */
+);
+
+void TLSX_free_cert_chain (
+  STACK_OF(X509) **chain
+);
+\end{lstlisting}
+
+A \verb|TSLX_get_cert_chain| deve ser usada em qualquer momento após o 
+estabelecimento da conexão TLS, mas antes do fechamento da mesma. Ela 
+devolve uma cópia de toda a cadeia de certificados do servidor que
+poderá então ser usada na próxima conexão a este 
+mesmo servidor. A função \verb|TLSX_set_server_cert_chain| atribui uma referência a 
+esta cadeia ao objeto SSL e ativa automaticamente a extensão \acl{SCCI}.
+
+A função \verb|TLSX_free_cert_chain| libera toda a memória utilizada por essa cadeia 
+quando não estiver mais sendo referenciada por nenhum objeto SSL. Essa 
+referência será anulada quando da destruição do objeto SSL associado ou 
+explicitamente através da chamada \verb|TLSX_set_server_cert_chain(ssl, NULL, 0)|.
+
+\subsection{Divergências}
+Nenhuma por não haver uma norma oficial.
+
+\subsection{Implementação}
+
+\begin{description}[\breaklabel\setlabelstyle{\ttfamily}]
+
+\item[s3\_both.c::ssl3\_output\_cert\_chain]
+	Na versão original criava e serializava toda uma cadeia de certificados 
+	diretamente no \emph{buffer} de saída, a partir do certificado final. Foi 
+	modificada para construir a cadeia e ao final decidir se esta será 
+	serializada ou será inteiramente suprimida, o que ocorrerá somente se as 
+	seguintes condições forem atendidas:
+	\begin{enumerate}
+	    \item O papel da conexão for ``servidor'';
+	    \item A extensão \acl{SCCI} tiver sido proposta e aceita;
+	    \item Houver uma correspondência integral entre os IDs informados na
+	    extensão e os certificados selecionados.
+	\end{enumerate}
+
+\item[s3\_clnt.c::ssl3\_get\_server\_certificate]
+	Caso a mensagem \tlsHsC oriunda do servidor esteja vazia e a extensão 
+	\acl{SCCI} tiver sido acordada, a cadeia de certificados será 
+	simplesmente uma cópia da cadeia definida através da função 
+	\verb|TLSX_set_server_cert_chain|. Nesse ponto é também incluída essa cadeia 
+	no cômputo do \emph{hash} da mensagem \tlsHsF enviada ao final do \emph{handshake}.
+
+\item[s3\_srvr.c::ssl3\_accept]
+	Modificada para atualizar o \emph{hash} a ser enviado na mensagem \tlsHsF com 
+	toda a cadeia de certificados caso esta tenha sido omitida na 
+	\verb|ssl3_output_cert_chain|.
+
+\end{description}
+
+\subsection{Testes de Conformidade}
+
+O teste foi realizado com a seguinte execução da aplicação \verb|s_client|:
+
+\begin{lstlisting}[caption={Chamada da \texttt{s\_client.sh} para o teste da extensão \acs{SCCI}}]
+./s_client.sh -tlsx_server_cert_id cert_sha1_hash
+\end{lstlisting}
+
+Uma vez acionada, entrou-se com a string \texttt{``n''} para forçar uma segunda 
+conexão TLS sem \emph{session resumption}. As mensagens TLS dessa última conexão e 
+que foram impactadas por essa extensão encontram-se exibidas a seguir.
+
+\begin{lstlisting}[caption={Mensagem \tlsHsCh com a extensão \acs{SCCI}}]
+Secure Socket Layer 
+  SSL Record Layer: Handshake Protocol: Client Hello 
+    Content Type: Handshake (22) 
+    Version: TLS 1.0 (0x0301) 
+    Length: 93 
+    Handshake Protocol: Client Hello 
+      Handshake Type: Client Hello (1) 
+      Length: 89 
+      Version: TLS 1.0 (0x0301) 
+      Random.gmt_unix_time: Jan  6, 2006 15:54:17.000000000 
+      Random.bytes 
+      Session ID Length: 0 
+      Cipher Suites Length: 2 
+      Cipher Suites (1 suite) 
+	Cipher Suite: TLS_RSA_WITH_RC4_128_SHA (0x0005) 
+      Compression Methods Length: 1 
+      Compression Methods (1 method) 
+	Compression Method: null (0) 
+      Extensions Length: 46 
+      Extension: Unknown 10 
+	Type: Unknown (|0x000a|) 
+	Length: |42| 
+	Data (42 bytes) 
+ 
+0000  00 c0 49 43 0b 55 00 50 04 aa 26 05 08 00 45 00   ..IC.U.P..&...E. 
+0010  00 8a 93 d1 40 00 40 06 c7 5a 0a 04 02 14 c9 2d   ....@.@..Z.....- 
+0020  09 fd a1 49 01 bb c6 bc e9 53 a6 d2 a6 84 50 18   ...I.....S....P. 
+0030  16 d0 3c 21 00 00 16 03 01 00 5d 01 00 00 59 03   ..<!......]...Y. 
+0040  01 43 be ae c9 59 97 28 3d 2c ef 3e d6 73 92 cd   .C...Y.(=,.>.s.. 
+0050  6a 83 e0 2f 0b ef b1 d1 46 8d 07 b1 6a f5 58 97   j../....F...j.X. 
+0060  a9 00 00 02 00 05 01 00 00 2e |00 0a 00 2a 03 0d|   ..........|...*..| 
+0070  |5c 3c bb 76 60 b4 36 9b a3 11 16 db 87 bd c0 81|   |\<.v`.6.........| 
+0080  |c1 14 da 03 27 39 9b 0a 3e 46 c9 36 85 2c c3 66|   |....'9..>F.6.,.f| 
+0090  |2b 90 d0 e4 d8 63 5e 78|                           |+....c^x|
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Resposta do servidor com destaque para a mensagem \tlsHsC vazia}]
+Secure Socket Layer 
+  TLS Record Layer: Handshake Protocol: Server Hello 
+    Content Type: Handshake (22) 
+    Version: TLS 1.0 (0x0301) 
+    Length: 80 
+    Handshake Protocol: Server Hello 
+      Handshake Type: Server Hello (2) 
+      Length: 76 
+      Version: TLS 1.0 (0x0301) 
+      Random.gmt_unix_time: Jan  6, 2006 15:54:09.000000000 
+      Random.bytes 
+      Session ID Length: 32 
+      Session ID (32 bytes) 
+      Cipher Suite: TLS_RSA_WITH_RC4_128_SHA (0x0005) 
+      Compression Method: null (0) 
+      Extensions Length: 4 
+      Extension: Unknown 10 
+	Type: Unknown (|0x000a|) 
+	Length: |0| 
+	Data (0 bytes) 
+  TLS Record Layer: Handshake Protocol: |Certificate| 
+    Content Type: Handshake (22) 
+    Version: TLS 1.0 (0x0301) 
+    Length: 7 
+    Handshake Protocol: Certificate 
+      Handshake Type: Certificate (11) 
+      Length: 3 
+      Certificates Length: |0| 
+  TLS Record Layer: Handshake Protocol: Server Hello Done 
+    Content Type: Handshake (22) 
+    Version: TLS 1.0 (0x0301) 
+    Length: 4 
+    Handshake Protocol: Server Hello Done 
+      Handshake Type: Server Hello Done (14) 
+      Length: 0
+\end{lstlisting}
+

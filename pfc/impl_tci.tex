@@ -1,0 +1,147 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Capítulo 2 - Trusted CA Indication
+%% Copyright 2006 Eliézio Batista de Oliveira
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{\acl{TCI}}
+
+\subsection{Especificação}
+
+\begin{lstlisting}[caption={RFC 3546, trecho da seção 3.4}]
+The "extension_data" field of this extension SHALL contain 
+"TrustedAuthorities" where: 
+ 
+   struct { 
+       TrustedAuthority trusted_authorities_list<0..2^16-1>; 
+   } TrustedAuthorities; 
+ 
+   struct { 
+       IdentifierType identifier_type; 
+       select (identifier_type) { 
+           case pre_agreed: struct {}; 
+           case key_sha1_hash: SHA1Hash; 
+           case x509_name: DistinguishedName; 
+           case cert_sha1_hash: SHA1Hash; 
+       } identifier; 
+   } TrustedAuthority; 
+ 
+   enum { 
+       pre_agreed(0), key_sha1_hash(1), x509_name(2), 
+       cert_sha1_hash(3), (255) 
+   } IdentifierType; 
+ 
+   opaque DistinguishedName<1..2^16-1>; 
+ 
+ 
+Here "TrustedAuthorities" provides a list of CA root key identifiers 
+that the client possesses.  Each CA root key is identified via 
+either: 
+ 
+-  "pre_agreed" - no CA root key identity supplied. 
+-  "key_sha1_hash" - contains the SHA-1 hash of the CA root key.  For 
+   DSA and ECDSA keys, this is the hash of the "subjectPublicKey" 
+   value.  For RSA keys, the hash is of the big-endian byte string 
+   representation of the modulus without any initial 0-valued bytes. 
+   (This copies the key hash formats deployed in other environments.) 
+ 
+-  "x509_name" - contains the DER-encoded X.509 DistinguishedName of 
+   the CA. 
+ 
+-  "cert_sha1_hash" - contains the SHA-1 hash of a DER-encoded 
+   Certificate containing the CA root key.
+\end{lstlisting}
+
+\subsection{API Estendida}
+
+\begin{lstlisting}[language=C,emph={TLSX_set_trusted_ca},caption={API Estendida para a extensão \acs{TCI}}]
+void TLSX_set_trusted_ca (
+    SSL *ssl,
+    int id_type,    /* TLSX_CERT_ID_PRE_AGREED,
+		       TLSX_CERT_ID_KEY_SHA1_HASH,
+		       TLSX_CERT_ID_X509_NAME, or
+		       TLSX_CERT_ID_CERT_SHA1_HASH */
+    const char *CAfile,  /* optional */
+    const char *CApath   /* optional */
+);
+\end{lstlisting}
+
+Essa função associa ao objeto \verb|SSL| uma lista de IDs de todos os certificados 
+encontrados no diretório indicado por \verb|CApath| cujo nome base (sem diretório) 
+adere ao padrão utilizado pelo OpenSSL para certificados de \acsp{CA}, ou seja, 
+segue o formato \texttt{``hhhhhhhh.d''}, onde \texttt{``hhhhhhhh''} é uma seqüência de oito 
+dígitos hexadecimais e \texttt{``d''} é um dígito decimal. O certificado opcionalmente 
+indicado por \verb|CAfile| é também acrescido a esse conjunto. Todos esses 
+certificados devem estar em formato \acs{PEM} (Base-64).
+
+\subsection{Divergências}
+
+\begin{enumerate}
+
+\item Não foi possível implementar a parte servidora dessa extensão pois o OpenSSL não permite a configuração de um servidor com múltiplos certificados diferenciados apenas pelo emissor;
+
+\item Como normalmente as aplicações que utilizam o OpenSSL especificam o
+\emph{Certificate Store} coletivamente (via \verb|SSL_CTX_load_verify_locations|),
+a API estendida obriga a adoção de um mesmo tipo de 
+identificador para todos os certificados.
+
+\end{enumerate}
+
+\subsection{Testes de Conformidade}
+
+Como os resultados são bastante semelhantes para os diversos tipos de IDs, 
+apresenta-se aqui somente o resultado de teste efetuado com o tipo 
+\verb|TLSX_CERT_ID_CERT_SHA1_HASH| com seguinte sintaxe na execução da aplicação 
+\verb|s_client|:
+
+\begin{lstlisting}
+./s_client.sh -tlsx_trusted_ca_id cert_sha1_hash
+\end{lstlisting}
+
+O diretório de trabalho possuía somente um certificado cujo \emph{hash} \acs{SHA1} pôde 
+ser obtido diretamente com o comando \verb|sha1sum|:
+
+\begin{lstlisting}[caption={Cálculo do \emph{hash} \acs{SHA1} do certificado do CA}]
+ebo@esparta:~/openssl-tlsx$ sha1sum 3ff23a0a.d 
+|27399b0a3e46c936852cc3662b90d0e4d8635e78|  3ff23a0a.d
+\end{lstlisting}
+
+A equivalência do \emph{hash} obtido com esse comando e o enviado na mensagem 
+\tlsHsCh abaixo (destacado em negrito e itálico no final da listagem), 
+comprova a correção da implementação desta extensão.
+
+\begin{lstlisting}[caption={Mensagem \tlsHsCh contendo a extensão \acs{TCI}}]
+Secure Socket Layer 
+  SSL Record Layer: Handshake Protocol: Client Hello 
+    Content Type: Handshake (22) 
+    Version: TLS 1.0 (0x0301) 
+    Length: 72 
+    Handshake Protocol: Client Hello 
+      Handshake Type: Client Hello (1) 
+      Length: 68 
+      Version: TLS 1.0 (0x0301) 
+      Random.gmt_unix_time: Jan  5, 2006 16:20:24.000000000 
+      Random.bytes 
+      Session ID Length: 0 
+      Cipher Suites Length: 2 
+      Cipher Suites (1 suite) 
+	Cipher Suite: TLS_RSA_WITH_RC4_128_SHA (0x0005) 
+      Compression Methods Length: 1 
+      Compression Methods (1 method) 
+	Compression Method: null (0) 
+      Extensions Length: 25 
+      Extension: trusted_ca_keys 
+	Type: trusted_ca_keys (|0x0003|) 
+	Length: |21| 
+	Data (21 bytes) 
+ 
+0000  00 00 00 00 00 00 00 00 00 00 00 00 08 00 45 00   ..............E. 
+0010  00 75 22 ee 40 00 40 06 19 93 7f 00 00 01 7f 00   .u".@.@......... 
+0020  00 01 c7 a9 01 bb eb ae f5 b1 eb 59 e3 a9 50 18   ...........Y..P. 
+0030  7f ff 72 72 00 00 16 03 01 00 48 01 00 00 44 03   ..rr......H...D. 
+0040  01 43 bd 63 68 29 5c 97 3f 14 37 d7 76 c0 11 35   .C.ch)\.?.7.v..5 
+0050  6e 25 fc bd 6a d8 91 e9 1d b9 2e 85 cf 39 38 56   n%..j........98V 
+0060  bb 00 00 02 00 05 01 00 00 19 |00 03 00 15 03 27|   ..........|.....'| 
+0070  |39 9b 0a 3e 46 c9 36 85 2c c3 66 2b 90 d0 e4 d8|   |9..>F.6.,.f+....| 
+0080  |63 5e 78|                                          |c^x|
+\end{lstlisting}
+

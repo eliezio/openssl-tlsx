@@ -1,0 +1,333 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Projeto Final de Curso
+%% Copyright 2006 Eliézio Batista de Oliveira
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass[a4paper,12pt,openright]{sty/report}
+%\usepackage{indentfirst}
+\usepackage[brazil]{babel}
+\usepackage[latin1]{inputenc}
+\usepackage{ifpdf}
+\usepackage{array}
+\usepackage[svgnames]{xcolor}
+\usepackage{colortbl}
+\usepackage{booktabs}
+\usepackage{calc}               % calc - standard package for length and number easy calculations
+\usepackage{expdlist}			% The expanded DESCRIPTION environment
+% Preciso carregar o pacote 'graphicx' antes do 'cclicenses' pois este
+% carrega implicitamente o 'rotating' que carrega o 'graphicx' sem opções!
+\ifpdf
+  \usepackage[pdftex]{graphicx}
+\else
+  \usepackage{graphicx}
+\fi
+\usepackage{cclicenses}
+\usepackage{xspace}
+\usepackage{suffix}
+\usepackage[printonlyused,nohyperlinks]{acronym}
+\usepackage[brazil]{varioref}
+
+%
+% F O N T S
+%
+\usepackage[T1]{fontenc}
+\usepackage{textcomp}
+\usepackage{relsize}                % Provides the useful \smaller and \larger commands
+\renewcommand{\rmdefault}{bch}      % Roman: Charter
+                                    % NOTE: usepackage{charter} breaks the Latin Modern 
+                                    % usage as Sans+Bold
+\renewcommand{\sfdefault}{lmss}     % Sans-Serif: Latin Modern
+\usepackage{amsfonts}
+\usepackage{amssymb,amsmath}
+\usepackage[scaled=0.9]{beramono}   % Typewriter: Vera Mono Sans
+\usepackage{wasysym}                % Required for the \davidsstar symbol
+
+\newcommand{\pfcTitulo}{Implementação das Extensões do Protocolo TLS no OpenSSL\xspace}
+\newcommand{\pfcTituloEN}{Implementation of TLS Extensions in OpenSSL\xspace}
+\newcommand{\pfcObra}{Projeto Final de Curso\xspace}
+\newcommand{\pfcCurso}{Bacharelado em Ciência da Computação\xspace}
+\newcommand{\pfcGrau}{Bacharel em Ciência da Computação\xspace}
+\newcommand{\pfcDepto}{Departamento de Ciência da Computação\xspace}
+\newcommand{\pfcInstituto}{Instituto de Matemática\xspace}
+\newcommand{\ufrj}{Universidade Federal do Rio de Janeiro\xspace}
+\newcommand{\pfcAutor}{Eliézio Batista de Oliveira\xspace}
+\newcommand{\pfcEmail}{eliezio@computer.org\xspace}
+\newcommand{\pfcOrientador}{Prof. Paulo Henrique de Aguiar Rodrigues, Ph.D.\xspace}
+\newcommand{\pfcProfessorA}{João Carlos Peixoto de Almeida da Costa, M.Sc.\xspace}
+\newcommand{\pfcProfessorB}{Fabio David, M.Sc.\xspace}
+\newcommand{\pfcData}{Março / 2006\xspace}
+\newcommand{\pfcDataAprov}{31 de Março de 2006\xspace}
+
+\newcommand{\pfcComentario}{\pfcObra submetido ao \pfcDepto do \pfcInstituto da \ufrj
+como parte dos requisitos necessários para obtenção do grau de \pfcGrau.}
+
+\newcommand{\pfcInstFont}{\scshape}
+\newcommand{\pfcInstituicao}{\pfcCurso \par
+    \pfcDepto \par
+    \pfcInstituto \par
+    \ufrj}
+
+\newcommand{\pfcLocal}{Rio de Janeiro -- RJ\xspace}
+
+%
+% P A G E   D I M E N S I O N S   A N D   F O R M A T T I N G
+%
+\setlength{\headheight}{14pt}
+\usepackage[hmargin={3cm,2cm},vmargin={3cm,2cm},includehead]{geometry}
+
+\usepackage[nodisplayskipstretch]{setspace}
+%\doublespacing
+\setstretch{1.35}
+
+% paragraph indentation size and skip
+\setlength{\parindent}{.7cm}
+\setlength{\parskip}{.25cm}
+
+
+%
+% T A B L E   O F   C O N T E N T S
+%
+%% Make sure that the bibliography is listed in the table of contents,
+%% but that the table of contents itself is not.
+\usepackage[nottoc]{tocbibind}
+\makeatletter \newcommand{\unchapter}[1]{\toc@chapter{#1}} \makeatother
+
+%% Control the fonts and formatting used in the table of contents.
+\usepackage[titles]{tocloft}
+\renewcommand{\cftchapfont}{\sffamily\bfseries}     % Use Sans-Serif in chapter entries
+
+% Um simples '\renewcommand' não funciona pois a redefinição destas
+% macros é feita tardiamente.
+\addto\captionsbrazil{\renewcommand{\listfigurename}{Figuras}}
+\addto\captionsbrazil{\renewcommand{\listtablename}{Tabelas}}
+  
+%
+% C H A P T E R S   A N D   S E C T I O N S   S T Y L E S
+%
+\setcounter{secnumdepth}{3}     % Increase the section depth number by 1
+
+%
+% C H A P T E R   T I T L E S
+%
+\usepackage{sty/sectsty}
+\allsectionsfont{\sffamily}
+
+\usepackage[newcentury]{quotchap}
+\renewcommand{\chapterheadstartvskip}{}
+\renewcommand{\sectfont}{\sffamily\bfseries}
+\definecolor{chaptergrey}{named}{Silver}
+
+%
+% P A G E   H E A D I N G S
+%
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+
+\renewcommand{\sectionmark}[1]{\markright{\thesection\ \ #1}}
+
+\fancyhf{} % clear all header and footer fields
+\lhead{\small\itshape \nouppercase{\rightmark}}
+\rhead{\small \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\fancypagestyle{plain}{%
+\fancyhf{} % clear all header and footer fields
+\renewcommand{\headrulewidth}{0pt}
+}
+
+%
+% L I S T I N G S
+%
+\usepackage{listings}
+\lstset{captionpos=b,
+    breaklines=true,
+    showstringspaces=false,
+    tabsize=4,
+    backgroundcolor=\color{AliceBlue},
+    basicstyle=\small\ttfamily,
+    keywordstyle=\color{ForestGreen}\bfseries,
+    moredelim=[is][\bfseries\color{blue}]{|}{|},
+    emphstyle=\color{blue}\bfseries}
+
+\renewcommand\lstlistingname{Listagem}
+\renewcommand\lstlistlistingname{Listagens}
+
+\renewcommand{\lstlistoflistings}{\begingroup
+    \tocfile{\lstlistlistingname}{lol}
+\endgroup}
+
+%
+% C A P T I O N S
+%
+%% Nicer formatting of figure captions.
+\usepackage[small,bf,up]{caption}
+\renewcommand{\captionfont}{\small\itshape}
+
+%
+% F O O T N O T E S
+%
+%\renewcommand{\thefootnote}{\fnsymbol{footnote}}
+
+%
+% E P I G R A P H
+%
+\usepackage{epigraph}
+\setlength{\epigraphwidth}{0.7\textwidth}
+\renewcommand{\textflush}{flushright}
+
+%
+% O B J E C T S   N U M B E R I N G
+%
+\usepackage{sty/chngcntr}
+% A NBT dita que a numeração deve ser independente de capítulos e seções.
+\counterwithout{figure}{chapter}
+\counterwithout{table}{chapter}
+\counterwithout{lstlisting}{chapter}
+
+%
+% H Y P E R R E F   &   U R L
+%
+\ifpdf
+	\usepackage[pdfpagelabels,pagebackref=false]{hyperref}
+	% Comandos definidos com '\xspace' no final causam problemas se
+	% a configuração for feita diretamente no \usepackage.
+    \hypersetup{%
+    	plainpages			= false,		% Since the page numbering is not continous.
+        pdftitle			= {\pfcTituloEN},
+        pdfsubject			= {Network Security Protocols},
+        pdfauthor			= {\pfcAutor},
+        pdfcreator			= {\LaTeX},
+        pdfkeywords			= {SSL, TLS, Security},
+        bookmarksopen		= true,
+        bookmarksopenlevel	= 0,
+        bookmarksnumbered	= true,
+        pdfpagemode			= UseOutlines,
+        colorlinks			= true,
+        linkcolor			= blue,
+        urlcolor			= blue
+        }
+    \pdfcompresslevel=9
+\else
+	\newcommand{\href}[2]{#2}
+\fi
+\usepackage{url}
+
+\usepackage[num,indent=1.7em]{abntcite}
+% Uso '[]' para as citações pois tem sido esse o padrão 'de facto' usado
+% nas dissertações.
+\citebrackets[]
+
+% Compressed images support
+% The bounding box information of a compressed EPS file (.eps.gz) will be
+% stored separately in a file with suffix '.eps.bb'.
+\DeclareGraphicsRule{.eps.gz}{eps}{.eps.bb}{`gunzip -c #1}
+
+\newcommand{\rfcurl}[2]{%
+	\href{http://www.apps.ietf.org/rfc/rfc#1.html\#sec-#2}{RFC~#1, seção~#2}%
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+%
+% hyphenation
+%
+\hyphenation{ha-n-d-sh-a-ke Op-en-SSL ci-phers}
+
+% Para destacar textos nas tabelas
+\newcommand{\hl}[1]{\textcolor{blue}{\bfseries #1}}
+\newcommand{\tm}[1]{\sffamily\mdseries #1}      % title - normal
+\newcommand{\tb}[1]{\sffamily\bfseries #1}      % title - bold
+
+% Header padrão das tabelas...
+\newcommand{\tlsFlowHeader}{\tm{Time (s)} & %
+            \tm{Direction} & %
+            \multicolumn{2}{c}{\tm{TCP}} & %
+            \tm{TLS Record [length]} \\ \cmidrule(lr){3-4} & %
+            \tm{C} $\longleftrightarrow$ \tm{S} &  \tm{Flags} & \tm{Length} & }
+\newcommand{\altrowcolor}{\rowcolor{Lavender}}
+
+% TLS Handshake Messages Shortcuts
+\newcommand{\tlsHsHr}{\textit{Hello Request}\xspace}
+\newcommand{\tlsHsCh}{\textit{Client Hello}\xspace}
+\newcommand{\tlsHsSh}{\textit{Server Hello}\xspace}
+\newcommand{\tlsHsC}{\textit{Certificate}\xspace}
+\newcommand{\tlsHsCr}{\textit{Certificate Request}\xspace}
+\newcommand{\tlsHsShd}{\textit{Server Hello Done}\xspace}
+\newcommand{\tlsHsCke}{\textit{Client Key Exchange}\xspace}
+\newcommand{\tlsHsCv}{\textit{Certificate Verify}\xspace}
+\newcommand{\tlsHsCcs}{\textit{Change Cipher Spec}\xspace}
+\newcommand{\tlsHsF}{\textit{Finished}\xspace}
+\newcommand{\tlsHsCu}{\textit{Certificate URL}\xspace}
+
+\sloppy     % Para aumentar a tolerância de re-espaçamento.
+
+\pagestyle{empty}
+
+\begingroup
+\renewcommand{\thepage}{Cover}
+\include{capa}
+\endgroup
+
+\setcounter{page}{1}
+\include{folharosto}
+
+\include{folhaaprovacao}
+
+\include{dedicatoria}
+
+\include{agradecimentos}
+
+\include{epigrafe}
+
+\include{resumo}
+
+\include{abstract}
+
+\tableofcontents
+
+\listoffigures
+
+\listoftables
+
+\lstlistoflistings
+
+\include{acronimos}
+
+\clearpage
+\pagestyle{fancy}
+
+%\fancypagestyle{plain}{%
+%\fancyhf{} % clear all header and footer fields
+%\rhead{\small \thepage}
+%\renewcommand{\headrulewidth}{0pt}
+%}
+
+\clearpage
+\include{introducao}
+
+\include{intro_cripto}
+\include{intro_tls}
+\include{intro_rfc3546}
+
+\include{impl}
+
+\include{impl_sni}
+\include{impl_mfl}
+\include{impl_ccu}
+\include{impl_tmac}
+\include{impl_tci}
+\include{impl_scci}
+
+\include{conclusao}
+
+\appendix
+
+\include{anexo_tlsx}
+\include{anexo_mkpki}
+
+\include{bibliografia}
+
+\end{document}
+

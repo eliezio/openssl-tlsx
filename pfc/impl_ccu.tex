@@ -1,0 +1,345 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Capítulo 2 - Client Certificate URL
+%% Copyright 2006 Eliézio Batista de Oliveira
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{\acl{CCU}}
+
+\subsection{Especificação}
+
+\begin{lstlisting}[caption={Definição do novo tipo de mensagem de \emph{handshake} \tlsHsCu}]
+   enum { 
+       ..., certificate_url(21), ..., 
+       (255) 
+   } HandshakeType;
+\end{lstlisting}
+
+\begin{lstlisting}[caption={RFC 3546, trecho da seção 3.3}]
+After negotiation of the use of client certificate URLs has been 
+successfully completed (by exchanging hellos including 
+"client_certificate_url" extensions), clients MAY send a 
+"CertificateURL" message in place of a "Certificate" message: 
+ 
+   struct { 
+       CertChainType type; 
+       URLAndOptionalHash url_and_hash_list<1..2^16-1>; 
+   } CertificateURL; 
+ 
+   enum { 
+       individual_certs(0), pkipath(1), (255) 
+   } CertChainType; 
+ 
+   struct { 
+       opaque url<1..2^16-1>; 
+       Boolean hash_present; 
+       select (hash_present) { 
+           case false: struct {}; 
+           case true: SHA1Hash; 
+       } hash; 
+   } URLAndOptionalHash; 
+ 
+   enum { 
+       false(0), true(1) 
+   } Boolean; 
+ 
+   opaque SHA1Hash[20]; 
+ 
+Here "url_and_hash_list" contains a sequence of URLs and optional 
+hashes. 
+ 
+When X.509 certificates are used, there are two possibilities: 
+ 
+-  if CertificateURL.type is "individual_certs", each URL refers to 
+   a single DER-encoded X.509v3 certificate, with the URL for the 
+   client's certificate first, or 
+ 
+-  if CertificateURL.type is "pkipath", the list contains a single 
+   URL referring to a DER-encoded certificate chain, using the type 
+   PkiPath described in Section 8.
+\end{lstlisting}
+
+\subsection{Divergências}
+
+\begin{enumerate}
+\item Os certificados individuais podem estar tanto no formato \acs{PEM} quanto 
+\acs{DER} (oficial). Foi implementada uma heurística simples para identificar 
+o formato;
+
+\item A aplicação servidora não está exigindo que o tipo \acs{MIME} indicado na 
+resposta HTTP seja \verb|application/pkix-pkipath|, como dita a 
+especificação.
+\end{enumerate}
+
+\subsection{API Estendida}
+
+\begin{lstlisting}[language=C,%
+		    emph={tlsx_cert_chain_empty,tlsx_cert_chain_add,%
+		    TLSX_set_certificate_chain,TLSX_CTX_set_certificate_fetcher_callback},%
+		    caption={API Estendida para a extensão \acs{CCU}}]
+/* ----- Client Side ----- */
+void tlsx_cert_chain_empty (
+    CERTIFICATE_CHAIN *cert_chain 
+);
+
+int tlsx_cert_chain_add (
+    CERTIFICATE_CHAIN *cert_chain,
+    int cert_type,    /* TLSX_CERT_CHAIN_TYPE_INDIVIDUAL or
+                         TLSX_CERT_CHAIN_TYPE_PKIPATH */
+    const char *url,
+    const unsigned char *sha1hash  /* optional (may be NULL) */ 
+);
+
+void TLSX_set_certificate_chain (
+    SSL *ssl,
+    const CERTIFICATE_CHAIN *cert_chain 
+);
+
+/* ----- Server Side ----- */
+void TLSX_CTX_set_certificate_fetcher_callback (
+    SSL_CTX *ctx,
+    int (*cb) (
+        SSL *ssl,
+        void *uarg,
+        const char *url, 
+        unsigned char **data,
+        unsigned int *data_len
+    ),
+    void *uarg
+);
+\end{lstlisting}
+
+\subsection{Implementação}
+
+Como a aplicação servidora, ao aceitar essa extensão, assume a 
+responsabilidade de obter a cadeia de certificados do cliente, fez-se necessário 
+embutir esse mecanismo na aplicação \verb|s_server|. Optou-se pela criação de um 
+novo módulo de nome \textit{``wget.c''} que, através da biblioteca \emph{open source} \emph{libcurl}
+\cite{Libcurl} implementa um cliente \acs{HTTP} genérico. O pacote de 
+desenvolvimento desta biblioteca (\verb|libcurl3-dev|, versão 7.14.0, no ambiente Linux de
+testes) deve estar previamente instalado na máquina para \emph{build} da aplicação 
+\verb|s_server|.
+
+A geração dos certificados individuais em formato \acs{DER} (\acs{ASN1} binário) a partir 
+do formato \acs{PEM} (ASCII Base64) é trivialmente realizada através do comando:
+
+\begin{lstlisting}[caption={Conversão de certificados para o formato \acs{DER}}]
+openssl x509 -in cert.pem -out cert.der -outform DER
+\end{lstlisting}
+
+Como o formato denominado PKIPATH ainda não é nativamente suportado 
+pelo OpenSSL e como também não se encontrou nenhuma ferramenta genérica 
+que o suportasse, foi necessária a criação de uma pequena aplicação em Java 1.4 
+para realizar essa tarefa (ver Apêndice \vref{chap:MkPkiPath}).
+
+A configuração do servidor \acs{HTTP} (Apache) foi modificada para que o tipo 
+\verb|application/pkix-pkipath| seja retornado para os arquivos com extensão  
+\texttt{``.pki''}.
+
+\begin{description}[\breaklabel\setlabelstyle{\ttfamily}]
+
+\item[s3\_clnt.c::ssl3\_connect]
+	A máquina de estados foi modificada no tratamento do estado 
+	\verb|SSL3_ST_CW_CERT_A| onde se decide se a nova mensagem \tlsHsCu 
+	será enviada no lugar da \tlsHsC ou não.
+
+\item[s3\_srvr.c::ssl3\_get\_client\_certificate]
+	Passou a aceitar e processar a mensagem \tlsHsCu caso tenha sido 
+	acordada no estágio inicial do \emph{handshake}. Toda a decodificação dessa nova 
+	mensagem está embutida nesta função, delegando apenas a recuperação 
+	dos certificados para as funções \verb|tlsx_retrieve_certificate| e 
+	\verb|tlsx_retrieve_pkipath| conforme o caso.
+
+\end{description}
+
+\subsection{Testes de Conformidade}
+
+Precisou-se, primeiramente, configurar a aplicação servidora para exibir a 
+autenticação do cliente, passando a acioná-la como se segue:
+
+\begin{lstlisting}[caption={Chamada da \texttt{s\_server.sh} para forçar a autenticação do cliente}]
+./s_server.sh -Verify 2
+\end{lstlisting}
+
+A sintaxe usada na aplicação cliente para exercitar essa extensão foi:
+
+\begin{lstlisting}[caption={Chamada da \texttt{s\_client.sh} para teste da extensão \acs{CCU}}]
+./s_client.sh -tlsx_cert_url http://localhost/certs/client.crt \
+    -key client.key
+\end{lstlisting}
+
+Para capturar também o tráfego \acs{HTTP} entre a aplicação \verb|s_server| e o servidor 
+Apache, a chamada do \emph{tethereal} foi modificada para:
+
+\begin{lstlisting}[caption={Chamada do \texttt{tethereal} para capturar tráfegos TLS e HTTP}]
+tethereal -i lo -V -x port 443 or port 80
+\end{lstlisting}
+
+\subsubsection{Resultado do teste com certificados individuais}
+
+Novamente esbarramos em uma limitação do \emph{tethereal} que não foi capaz de 
+decodificar propriamente a nova mensagem \tlsHsCu, que a identificou 
+erroneamente como \emph{Encrypted Handshake Message}. Mas é possível comprovar a 
+correção da implementação conferindo diretamente a seqüência de bytes do 
+registro correspondente a essa nova mensagem, que se encontra destacada na 
+listagem a seguir:
+
+\begin{lstlisting}[caption={Mensagem \tlsHsCu}]
+Secure Socket Layer 
+  TLS Record Layer: Handshake Protocol: Encrypted Handshake Message 
+    Content Type: Handshake (22) 
+    Version: TLS 1.0 (0x0301) 
+    Length: |43|
+    Handshake Protocol: Encrypted Handshake Message 
+  TLS Record Layer: Handshake Protocol: Client Key Exchange 
+    Content Type: Handshake (22) 
+    Version: TLS 1.0 (0x0301) 
+    Length: 134 
+    Handshake Protocol: Client Key Exchange 
+      Handshake Type: Client Key Exchange (16) 
+      Length: 130 
+  TLS Record Layer: Handshake Protocol: Certificate Verify 
+    Content Type: Handshake (22) 
+    Version: TLS 1.0 (0x0301) 
+    Length: 134 
+    Handshake Protocol: Certificate Verify 
+      Handshake Type: Certificate Verify (15) 
+      Length: 130 
+  TLS Record Layer: Change Cipher Spec Protocol: Change Cipher Spec 
+    Content Type: Change Cipher Spec (20) 
+    Version: TLS 1.0 (0x0301) 
+    Length: 1 
+    Change Cipher Spec Message 
+  TLS Record Layer: Handshake Protocol: Encrypted Handshake Message 
+    Content Type: Handshake (22) 
+    Version: TLS 1.0 (0x0301) 
+    Length: 36 
+    Handshake Protocol: Encrypted Handshake Message 
+ 
+0000  00 00 00 00 00 00 00 00 00 00 00 00 08 00 45 00   ..............E. 
+0010  01 9d ac cf 40 00 40 06 8e 89 7f 00 00 01 7f 00   ....@.@......... 
+0020  00 01 c7 bb 01 bb fb 40 02 02 fb b0 f8 01 50 18   .......@......P. 
+0030  7f ff d3 25 00 00 16 03 01 |00 2b 15 00 00 27 00|   |...%......+...'.|
+0040  |00 24 00 21 68 74 74 70 3a 2f 2f 6c 6f 63 61 6c|   |.$.!http://local|
+0050  |68 6f 73 74 2f 63 65 72 74 73 2f 63 6c 69 65 6e|   |host/certs/clien|
+0060  |74 2e 63 72 74 00| 16 03 01 00 86 10 00 00 82 00   |t.crt.|..........
+0070  80 82 56 c1 53 4a 26 be f1 23 dd 3a 9d 76 19 8c   ..V.SJ&..#.:.v..
+0080  ac 0e d0 e1 72 a3 0d 13 b0 59 cd 35 82 e0 ee 23   ....r....Y.5...#
+0090  26 8e d7 61 71 09 1d 46 bd 01 86 a8 8b 57 0f e9   &..aq..F.....W..
+                          ....... 
+0180  01 01 16 03 01 00 24 7e c1 60 17 68 94 44 ae dd   ......$~.`.h.D..
+0190  1c 90 2c 40 52 28 42 54 4b 25 3c 9b d0 92 68 67   ..,@R(BTK%<...hg
+01a0  d1 ca 9e 6c 13 62 0e d3 ed ae 51                  ...l.b....
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Solicitação HTTP enviada pela aplicação \texttt{s\_server}}]
+Hypertext Transfer Protocol 
+  GET /certs/client.crt HTTP/1.1\r\n 
+    Request Method: GET 
+    Request URI: /certs/client.crt 
+    Request Version: HTTP/1.1 
+  Host: localhost\r\n 
+  Accept: */*\r\n 
+  \r\n
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Início (cabeçalho) da resposta HTTP enviada pelo servidor para a aplicação \texttt{s\_server}}]
+Hypertext Transfer Protocol 
+  HTTP/1.1 200 OK\r\n 
+    Request Version: HTTP/1.1 
+    Response Code: 200 
+  Date: Thu, 05 Jan 2006 17:32:37 GMT\r\n 
+  Server: Apache/2.0.54 (Ubuntu) DAV/2 SVN/1.2.0 mod_python/3.1.3 Python/2.4.2 PHP/4.4.0-3 mod_ruby/1.2.4 Ruby/1.8.3(2005-06-23)\r\n 
+  Last-Modified: Thu, 05 Jan 2006 17:01:44 GMT\r\n 
+  ETag: "240f2-b66-7cbc2e00"\r\n 
+  Accept-Ranges: bytes\r\n 
+  Content-Length: 2918\r\n 
+  Content-Type: application/x-x509-ca-cert\r\n 
+  \r\n
+\end{lstlisting}
+
+\subsubsection{Resultado do teste com PKIPATH}
+
+A sintaxe usada para aplicação cliente foi modificada para:
+
+\begin{lstlisting}
+./s_client.sh -tlsx_pkipath_url http://localhost/certs/certs.pki \ 
+    -key client.key
+\end{lstlisting}
+
+Valem as mesmas considerações feitas para o teste anterior quanto à análise dos 
+dados capturados pelo \emph{tethereal}.
+
+\begin{lstlisting}[caption={Mensagem \tlsHsCu}]
+Secure Socket Layer 
+  TLS Record Layer: Handshake Protocol: Encrypted Handshake Message 
+    Content Type: Handshake (22) 
+    Version: TLS 1.0 (0x0301) 
+    Length: |42| 
+    Handshake Protocol: Encrypted Handshake Message 
+  TLS Record Layer: Handshake Protocol: Client Key Exchange 
+    Content Type: Handshake (22) 
+    Version: TLS 1.0 (0x0301) 
+    Length: 134 
+    Handshake Protocol: Client Key Exchange 
+      Handshake Type: Client Key Exchange (16) 
+      Length: 130 
+  TLS Record Layer: Handshake Protocol: Certificate Verify 
+    Content Type: Handshake (22) 
+    Version: TLS 1.0 (0x0301) 
+    Length: 134 
+    Handshake Protocol: Certificate Verify 
+      Handshake Type: Certificate Verify (15) 
+      Length: 130 
+  TLS Record Layer: Change Cipher Spec Protocol: Change Cipher Spec 
+    Content Type: Change Cipher Spec (20) 
+    Version: TLS 1.0 (0x0301) 
+    Length: 1 
+    Change Cipher Spec Message 
+  TLS Record Layer: Handshake Protocol: Encrypted Handshake Message 
+    Content Type: Handshake (22) 
+    Version: TLS 1.0 (0x0301) 
+    Length: 36 
+    Handshake Protocol: Encrypted Handshake Message 
+
+0000  00 00 00 00 00 00 00 00 00 00 00 00 08 00 45 00   ..............E. 
+0010  01 9c 6a 03 40 00 40 06 d1 56 7f 00 00 01 7f 00   ..j.@.@..V...... 
+0020  00 01 cd 70 01 bb 21 39 b1 cc 20 ef 7e 63 50 18   ...p..!9.. .~cP. 
+0030  7f ff d2 22 00 00 16 03 01 |00 2a 15 00 00 26 01|   ...".....|.*...&.|
+0040  |00 23 00 20 68 74 74 70 3a 2f 2f 6c 6f 63 61 6c|   |.#. http://local|
+0050  |68 6f 73 74 2f 63 65 72 74 73 2f 63 65 72 74 73|   |host/certs/certs|
+0060  |2e 70 6b 69 00| 16 03 01 00 86 10 00 00 82 00 80   |.pki.|...........
+0070  7c fb e4 c7 8a 27 ef 23 2d 18 f8 be f2 97 d1 34   .....'.#-......4
+0080  30 b0 a3 4b 1f d8 b5 8e 49 d5 a6 eb 3e ea af 6d   0..K....I...>..m
+0090  ae a1 0d 94 cb 66 89 b4 74 d2 86 5d 64 80 c0 96   .....f..t..]d...
+                          ....... 
+0180  01 16 03 01 00 24 7e bc d4 51 8f a9 95 33 b6 0c   .....$~..Q...3..
+0190  0b c2 db 9b 8d cc 56 28 81 14 a0 74 35 36 3e 8b   ......V(...t56>.
+01a0  22 9c f1 f1 0d d3 3e 0f fe 3b                     ".....>..
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Solicitação HTTP enviada pela aplicação \texttt{s\_server}}]
+Hypertext Transfer Protocol 
+  GET /certs/certs.pki HTTP/1.1\r\n 
+    Request Method: GET 
+    Request URI: /certs/certs.pki 
+    Request Version: HTTP/1.1 
+  Host: localhost\r\n 
+  Accept: */*\r\n 
+  \r\n
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Início (cabeçalho) da resposta HTTP enviada pelo servidor para a aplicação \texttt{s\_server}}]
+Hypertext Transfer Protocol 
+  HTTP/1.1 200 OK\r\n 
+    Request Version: HTTP/1.1 
+    Response Code: 200 
+  Date: Thu, 05 Jan 2006 17:49:30 GMT\r\n 
+  Server: Apache/2.0.54 (Ubuntu) DAV/2 SVN/1.2.0 mod_python/3.1.3 Python/2.4.2 PHP/4.4.0-3 mod_ruby/1.2.4 Ruby/1.8.3(2005-06-23)\r\n 
+  Last-Modified: Thu, 05 Jan 2006 16:42:45 GMT\r\n 
+  ETag: "240f0-654-38d86b40"\r\n 
+  Accept-Ranges: bytes\r\n 
+  Content-Length: 1620\r\n 
+  Content-Type: application/pkix-pkipath\r\n 
+  \r\n
+\end{lstlisting}
+

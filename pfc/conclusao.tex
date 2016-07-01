@@ -1,0 +1,117 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Conclusão e Trabalhos Futuros
+%% Copyright 2006 Eliézio Batista de Oliveira
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\chapter{Conclusão e Trabalhos Futuros}
+
+\section{Conclusão}
+
+Apesar da RFC~3546 ter sido publicada há quase três anos, somente agora
+tem surgido implementações das extensões propostas, mas mesmo assim parciais.
+
+A versão em desenvolvimento do OpenSSL (0.9.9) já contém uma implementação funcional da
+extensão \acl{SNI} que também é contemplada na vindoura versão do \emph{browser} Opera (9.0)
+e na pilha GnuTLS.
+
+As demais extensões, todas voltadas para sistemas embutidos, tem recebido pouca ou quase nenhuma
+atenção dos desenvolvedores de \emph{software} \emph{open-source}, assim como de empresas comerciais.
+
+Com base na minha experiência em desenvolvimento de soluções de comunicação, entendo que esse interesse
+tem sido atenuado por alguns mitos:
+
+\begin{itemize}
+
+\item De que o ostensivo e contínuo aumento na banda em praticamente todos os meios de comunicação dispensaria a necessidade de esforços para a otimização de protocolos. Essa expectativa não procede pois o aumento na demanda tem sido ainda mais vertiginoso, principalmente em redes utilizadas por equipamentos móveis;
+
+\item Que o mecanismo de restauração de sessões TLS anularia a aplicabilidade da maioria destas
+extensões. De fato, com excessão das extensões \acl{MFL} e \acl{TMAC}, todas as outras cinco só são
+aplicáveis em \emph{handshakes} completos.
+
+No entanto, ao contrário do muitos supõem, em geral as sessões TLS não são mantidas por muito tempo pelos servidores HTTPS -- os maiores beneficiados por este mecanismo -- por causa do espaço em memória que seria necessário para armazená-las em larga escala.
+No site \emph{Amazon.com}, por exemplo, as sessões TLS são descartadas após breves 2 minutos!
+
+\end{itemize}
+
+A minha real expectativa é de que a implementação alvo deste projeto possa contribuir efetivamente
+para popularizar o uso dessas extensões para um uso mais racional dos recursos disponíveis para
+sistemas restritos.
+
+\section{Propostas de Trabalhos Futuros}
+
+\subsection{Tarefas Gerais}
+
+\begin{itemize}
+
+\item Submissão ao \emph{core team} de desenvolvedores do OpenSSL a fim de 
+oficializar esta implementação;
+
+\item Replicar a API proposta no nível \texttt{CTX}, visando a consistência com a API 
+oficial do OpenSSL;
+
+\item Garantir que as novas implementações são \emph{thread-safe};
+
+\item Incorporação de outras possíveis extensões já definidas pelo \emph{\acs{IETF} TLS 
+Working Group} ou que ainda estejam em fase de discussão. Exemplo: a que 
+permite a substituição do \acs{SHA1} por algum algoritmo de \emph{hashing} mais 
+seguro (SHA-256 ou SHA-512, por exemplo);
+
+\item Implementar estas extensões em uma pilha SSL/TLS voltada para
+sistemas embutidos. O candidato mais adequado parece ser o MatrixSSL (\url{http://www.matrixssl.org/}),
+principalmente por causa do seu duplo-licenciamento (GPL e comercial);
+
+\item Corrigir o Ethereal para decodificar corretamente a mensagem \tlsHsCu
+e ser capaz de desfragmentar registros;
+
+\end{itemize}
+
+\subsection{Extensão \acl{SNI}}
+
+\begin{itemize}
+
+\item Implementar a parte servidora, incluindo as necessárias modificações
+no \emph{``mod\_ssl''} (\url{http://httpd.apache.org/docs/2.0/ssl/}) para ativar e configurar os
+seus diversos parâmetros.
+
+\end{itemize}
+
+\subsection{Extensão \acl{CCU}}
+
+\begin{itemize}
+
+\item Implementar o \emph{cache} de certificados no servidor;
+
+\item Analisar a possibilidade de usar algum esquema específico em que o
+cliente informe somente o contexto (ou \emph{domain}/\emph{realm}) e um
+identificador (\emph{serial number}/\emph{username}) e que o servidor seja
+capaz de ``montar'' uma \acs{URL} com base nessas informações e em \emph{template}
+configurado;
+
+\item Implementar mecanismos que restrinjam o acesso a um conjunto limitado
+de provedores de certificados. Visar também minimizar eventuais ataques do
+tipo \ac{DoS}.
+
+\end{itemize}
+
+\subsection{Extensão \acl{CSR}}
+
+\begin{itemize}
+
+\item Além de implementar esta extensão, avaliar a possibilidade do uso de
+outros protocolos alternativos, tais como \ac{SCVP}, \ac{DCS} e \ac{OCSPX};
+
+\end{itemize}
+
+\subsection{Extensão \acl{SCCI}}
+
+\begin{itemize}
+
+\item Obtenção de um identificador oficial para esta extensão junto a
+\acs{IANA}/\acs{IETF} (vide \url{http://www.iana.org/assignments/tls-extensiontype-values});
+
+\item Submissão desta nova extensão ao grupo de trabalho do \acs{IETF}
+responsável pelo TLS para uma possível criação de uma \emph{Internet-Draft} e
+futuramente de uma RFC;
+
+\end{itemize}
+
