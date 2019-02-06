@@ -182,7 +182,6 @@ como parte dos requisitos necessários para obtenção do grau de \pfcGrau.}
 % A NBT dita que a numeração deve ser independente de capítulos e seções.
 \counterwithout{figure}{chapter}
 \counterwithout{table}{chapter}
-\counterwithout{lstlisting}{chapter}
 
 %
 % H Y P E R R E F   &   U R L
@@ -212,7 +211,7 @@ como parte dos requisitos necessários para obtenção do grau de \pfcGrau.}
 \fi
 \usepackage{url}
 
-\usepackage[num,indent=1.7em]{abntcite}
+\usepackage[num,indent=1.7em]{abntex2cite}
 % Uso '[]' para as citações pois tem sido esse o padrão 'de facto' usado
 % nas dissertações.
 \citebrackets[]
@@ -229,6 +228,7 @@ como parte dos requisitos necessários para obtenção do grau de \pfcGrau.}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \begin{document}
+\counterwithout{lstlisting}{chapter}
 
 %
 % hyphenation
