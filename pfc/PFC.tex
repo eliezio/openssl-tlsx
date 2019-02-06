@@ -3,10 +3,10 @@
 %% Copyright 2006 Eliézio Batista de Oliveira
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\documentclass[a4paper,12pt,openright]{sty/report}
+\documentclass[a4paper,12pt,openright]{report}
 %\usepackage{indentfirst}
 \usepackage[brazil]{babel}
-\usepackage[latin1]{inputenc}
+\usepackage[utf8]{inputenc}
 \usepackage{ifpdf}
 \usepackage{array}
 \usepackage[svgnames]{xcolor}
@@ -34,7 +34,7 @@
 \usepackage{textcomp}
 \usepackage{relsize}                % Provides the useful \smaller and \larger commands
 \renewcommand{\rmdefault}{bch}      % Roman: Charter
-                                    % NOTE: usepackage{charter} breaks the Latin Modern 
+                                    % NOTE: usepackage{charter} breaks the Latin Modern
                                     % usage as Sans+Bold
 \renewcommand{\sfdefault}{lmss}     % Sans-Serif: Latin Modern
 \usepackage{amsfonts}
@@ -100,7 +100,7 @@ como parte dos requisitos necessários para obtenção do grau de \pfcGrau.}
 % macros é feita tardiamente.
 \addto\captionsbrazil{\renewcommand{\listfigurename}{Figuras}}
 \addto\captionsbrazil{\renewcommand{\listtablename}{Tabelas}}
-  
+
 %
 % C H A P T E R S   A N D   S E C T I O N S   S T Y L E S
 %
@@ -178,7 +178,7 @@ como parte dos requisitos necessários para obtenção do grau de \pfcGrau.}
 %
 % O B J E C T S   N U M B E R I N G
 %
-\usepackage{sty/chngcntr}
+\usepackage{chngcntr}
 % A NBT dita que a numeração deve ser independente de capítulos e seções.
 \counterwithout{figure}{chapter}
 \counterwithout{table}{chapter}

@@ -1,17 +1,37 @@
-all: pfc.ps pfc.pdf
+all: PFC.pdf
 
-pfc.dvi : pfc.tex cap1.tex cap2.tex cap2_sni.tex cap2_mfl.tex cap2_ccu.tex \
-	cap2_thmac.tex cap2_tci.tex cap2_scci.tex conclusao.tex
-	latex pfc
-	bibtex pfc
-	latex pfc
-	latex pfc
-	
-pfc.ps: pfc.dvi
-	dvips -t a4 -o pfc.ps pfc
-	
-pfc.pdf: pfc.dvi
-	pdflatex pfc
+TEX_SOURCES = \
+	PFC.tex \
+	capa.tex \
+	folharosto.tex \
+	folhaaprovacao.tex \
+	dedicatoria.tex \
+	agradecimentos.tex \
+	epigrafe.tex \
+	resumo.tex \
+	abstract.tex \
+	acronimos.tex \
+	introducao.tex \
+	intro_cripto.tex \
+	intro_tls.tex \
+	intro_rfc3546.tex \
+	impl.tex \
+	impl_sni.tex \
+	impl_mfl.tex \
+	impl_ccu.tex \
+	impl_tmac.tex \
+	impl_tci.tex \
+	impl_scci.tex \
+	conclusao.tex \
+	anexo_tlsx.tex \
+	anexo_mkpki.tex \
+	bibliografia.tex
+
+PFC.pdf : ${TEX_SOURCES}
+	pdflatex PFC
+	-bibtex PFC
+	pdflatex PFC
+	pdflatex PFC
 
 clean:
-	rm -f *.aux *.log *.blg *.bbl *.dvi *.ps *.pdf *.toc *.lot *.lof
+	rm -fv *.aux *.bbl *.blg *.lof *.log *.lol *.lot *.out *.pdf *.toc
