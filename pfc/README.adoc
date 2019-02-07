@@ -1,0 +1,16 @@
+## Required packages
+
+### ArchLinux packages
+
+- texlive-bin
+- texlive-latexextra
+- texlive-fontsextra
+- abntex (AUR)
+
+### Debian/Ubuntu packages
+
+- texlive
+- texlive-latex-extra
+- texlive-fonts-extra
+- texlive-lang-portuguese
+- abntex
