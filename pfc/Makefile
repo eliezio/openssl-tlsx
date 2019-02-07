@@ -28,10 +28,12 @@ TEX_SOURCES = \
 	bibliografia.tex
 
 PFC.pdf : ${TEX_SOURCES}
-	pdflatex PFC
-	-bibtex PFC
-	pdflatex PFC
-	pdflatex PFC
+	mkdir -p out
+	pdflatex --output-directory out PFC
+	cd out && BIBINPUTS="..:" bibtex PFC
+	pdflatex --output-directory out PFC
+	pdflatex --output-directory out PFC
+	cp -v out/PFC.pdf PFC.pdf
 
 clean:
-	rm -fv *.aux *.bbl *.blg *.lof *.log *.lol *.lot *.out *.pdf *.toc
+	rm -rfv out
