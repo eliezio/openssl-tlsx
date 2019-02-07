@@ -10,3 +10,5 @@
 *.lof
 *.out
 out/
+.idea/
+.gradle/
