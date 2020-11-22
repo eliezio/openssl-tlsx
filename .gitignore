@@ -9,7 +9,6 @@
 *.lol
 *.lof
 *.out
-PFC.pdf
 out/
 .idea/
 .gradle/
