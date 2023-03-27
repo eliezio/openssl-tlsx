@@ -9,29 +9,29 @@ defendida por \pfcAutor e aprovada em \pfcDataAprov pela banca examinadora
 constituída pelos professores:
 
 % width of the line and text under the line
-\setlength{\ABNTsignwidth}{8cm}
+\setlength{\ABNTEXsignwidth}{8cm}
 
 % thickness of the line
-\setlength{\ABNTsignthickness}{0pt}
+\setlength{\ABNTEXsignthickness}{0pt}
 
 % ammount of space left between previous text and th signature line
-\setlength{\ABNTsignskip}{2.5cm}
+\setlength{\ABNTEXsignskip}{2.5cm}
 
-\setlength{\ABNTsignthickness}{0.4pt}
-\setlength{\ABNTsignwidth}{10cm}
-\setlength{\ABNTsignskip}{3.5cm}
+\setlength{\ABNTEXsignthickness}{0.4pt}
+\setlength{\ABNTEXsignwidth}{10cm}
+\setlength{\ABNTEXsignskip}{3.5cm}
 
-\newcommand{\ABNTsign}[1]{%
-  \parbox[t]{\ABNTsignwidth}{\setstretch{1}\vspace*{\ABNTsignskip}\centering%
-  \rule{\ABNTsignwidth}{\ABNTsignthickness}\\%
+\newcommand{\ABNTEXsign}[1]{%
+  \parbox[t]{\ABNTEXsignwidth}{\setstretch{1}\vspace*{\ABNTEXsignskip}\centering%
+  \rule{\ABNTEXsignwidth}{\ABNTEXsignthickness}\\%
   \nopagebreak #1\par}%
 }
 
-\newcommand{\ABNTcsign}[1]%
-  {\begingroup\par\centering\ABNTsign{#1}\par\endgroup}
+\newcommand{\ABNTEXcsign}[1]%
+  {\begingroup\par\centering\ABNTEXsign{#1}\par\endgroup}
 
-\ABNTcsign{\pfcOrientador \\ Orientador}
+\ABNTEXcsign{\pfcOrientador \\ Orientador}
 
-\ABNTcsign{\pfcProfessorA \\ NCE - UFRJ}
+\ABNTEXcsign{\pfcProfessorA \\ NCE - UFRJ}
 
-\ABNTcsign{\pfcProfessorB \\ NCE - UFRJ}
+\ABNTEXcsign{\pfcProfessorB \\ NCE - UFRJ}

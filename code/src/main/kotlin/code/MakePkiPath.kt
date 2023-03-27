@@ -6,12 +6,13 @@ import java.io.FileOutputStream
 import java.security.cert.Certificate
 import java.security.cert.CertificateFactory
 import java.util.*
+import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
 
     if (args.isEmpty()) {
         println("Usage:: java MakePkiPath <certfile>")
-        System.exit(1)
+        exitProcess(1)
     }
 
     val cf = CertificateFactory.getInstance("X.509")

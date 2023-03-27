@@ -3,9 +3,9 @@
 %% Copyright 2006 Eliézio Batista de Oliveira
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\documentclass[a4paper,12pt,openright]{report}
+\documentclass[a4paper,12pt,openright,brazil]{abntex2}
 %\usepackage{indentfirst}
-\usepackage[brazil]{babel}
+%\usepackage[brazil]{babel}
 \usepackage[utf8]{inputenc}
 \usepackage{ifpdf}
 \usepackage{array}
@@ -75,9 +75,9 @@ como parte dos requisitos necessários para obtenção do grau de \pfcGrau.}
 \setlength{\headheight}{14pt}
 \usepackage[hmargin={3cm,2cm},vmargin={3cm,2cm},includehead]{geometry}
 
-\usepackage[nodisplayskipstretch]{setspace}
+% \usepackage[nodisplayskipstretch]{setspace}
 %\doublespacing
-\setstretch{1.35}
+% \setstretch{1.35}
 
 % paragraph indentation size and skip
 \setlength{\parindent}{.7cm}
@@ -211,7 +211,8 @@ como parte dos requisitos necessários para obtenção do grau de \pfcGrau.}
 \fi
 \usepackage{url}
 
-\usepackage[num,indent=1.7em]{abntcite}
+\usepackage[alf,abnt-emphasize=bf,abnt-full-initials=yes]{abntex2cite}
+%\usepackage[num,indent=1.7em]{abntex2cite}
 % Uso '[]' para as citações pois tem sido esse o padrão 'de facto' usado
 % nas dissertações.
 \citebrackets[]
